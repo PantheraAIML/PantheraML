@@ -69,7 +69,6 @@ __all__ = [
     "PantheraMLDistributedTrainer",
     "PantheraMLTPUTrainer",  # Experimental TPU trainer
     "pantheraml_train",
-    "_patch_trl_trainer",
     "PantheraMLVisionDataCollator",
     "MultiGPUConfig",
     "MultiTPUConfig",  # Experimental TPU config

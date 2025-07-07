@@ -189,8 +189,14 @@ pass
 
 # For Gradio HF Spaces?
 # if "SPACE_AUTHOR_NAME" not in os.environ and "SPACE_REPO_NAME" not in os.environ:
-import triton
-if DEVICE_TYPE == "cuda":
+try:
+    import triton
+    HAS_TRITON = True
+except ImportError:
+    triton = None
+    HAS_TRITON = False
+
+if DEVICE_TYPE == "cuda" and HAS_TRITON:
     libcuda_dirs = lambda: None
     if Version(triton.__version__) >= Version("3.0.0"):
         try: from triton.backends.nvidia.driver import libcuda_dirs
