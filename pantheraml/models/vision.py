@@ -61,7 +61,7 @@ except:
     # Old HF Hub versions <= 0.0.25
     from huggingface_hub.utils._token import get_token
 pass
-from unsloth import DEVICE_TYPE
+from pantheraml import DEVICE_TYPE
 
 __all__ = [
     "FastBaseModel",
