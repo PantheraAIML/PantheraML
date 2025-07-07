@@ -21,6 +21,21 @@ maintainers = [
 classifiers = [
     "Programming Language :: Python",
 ]
+dependencies = [
+    "torch",
+    "transformers>=4.51.3,!=4.47.0,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3",
+    "trl>=0.7.9,!=0.9.0,!=0.9.1,!=0.9.2,!=0.9.3,!=0.15.0",
+    "bitsandbytes>=0.42.0",
+    "unsloth_zoo>=2025.3.1",
+    "datasets>=3.4.1",
+    "accelerate>=0.34.1",
+    "peft>=0.7.1,!=0.11.0",
+    "numpy",
+    "packaging",
+    "sentencepiece>=0.2.0",
+    "tqdm",
+    "psutil",
+]
 
 [tool.setuptools.dynamic]
 version = {attr = "pantheraml.models._utils.__version__"}
@@ -29,7 +44,7 @@ version = {attr = "pantheraml.models._utils.__version__"}
 include-package-data = false
 
 [project.scripts]
-pantheraml-cli = "pantheraml_cli_standalone:main"
+pantheraml-cli = "pantheraml.cli_standalone:main"
 
 [tool.setuptools.packages.find]
 exclude = ["images*", "tests*", "kernels/moe*"]
@@ -40,7 +55,7 @@ triton = [
 ]
 
 huggingface = [
-    "unsloth_zoo>=2025.6.8",
+    "unsloth_zoo>=2025.3.1",
     "packaging",
     "tyro",
     "transformers>=4.51.3,!=4.47.0,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3",
@@ -384,7 +399,7 @@ colab-ampere-torch220 = [
     "flash-attn>=2.6.3",
 ]
 colab-new = [
-    "unsloth_zoo>=2025.6.8",
+    "unsloth_zoo>=2025.3.1",
     "packaging",
     "tyro",
     "transformers>=4.51.3,!=4.47.0,!=4.52.0,!=4.52.1,!=4.52.2,!=4.52.3",

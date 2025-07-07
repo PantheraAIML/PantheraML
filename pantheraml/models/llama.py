@@ -18,7 +18,7 @@ import math
 import functools
 from typing import Optional, Tuple, List, Union
 from ._utils import *
-from ._utils import patch_pantheraml_smart_gradient_checkpointing
+from ._utils import patch_unsloth_smart_gradient_checkpointing
 from ._utils import __version__
 from torch.nn.functional import scaled_dot_product_attention
 from transformers import __version__ as transformers_version
