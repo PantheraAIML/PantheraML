@@ -17,11 +17,23 @@ Usage:
 
 import argparse
 import os
+import json
+
+# Import PantheraML first for optimal performance
+try:
+    from pantheraml import FastLanguageModel
+    from pantheraml.chat_templates import get_chat_template
+    from pantheraml.trainer import pantheraml_train
+    print("✅ Successfully imported PantheraML components")
+except ImportError as e:
+    print(f"❌ Error importing PantheraML: {e}")
+    print("Please ensure PantheraML is properly installed")
+
+# Now import other ML libraries
 import torch
 from datasets import load_dataset
 from transformers import TrainingArguments
 from trl import SFTTrainer
-import json
 
 # PantheraML Multi-GPU support
 try:
@@ -38,17 +50,25 @@ try:
 except ImportError:
     PANTHERAML_DISTRIBUTED_AVAILABLE = False
     print("⚠️ PantheraML distributed training not available")
-
-# Import PantheraML components
-try:
-    from pantheraml import FastLanguageModel
-    from pantheraml.chat_templates import get_chat_template
-    from pantheraml.trainer import pantheraml_train
-    print("✅ Successfully imported PantheraML components")
-except ImportError as e:
-    print(f"❌ Error importing PantheraML: {e}")
-    print("Please ensure PantheraML is properly installed")
-    exit(1)
+    
+    # Provide fallback functions for single-GPU mode
+    def setup_multi_gpu(*args, **kwargs):
+        pass
+    
+    def is_multi_gpu_available():
+        return False
+    
+    def get_world_size():
+        return 1
+    
+    def get_rank():
+        return 0
+    
+    def is_main_process():
+        return True
+    
+    def cleanup_distributed():
+        pass
 
 def setup_multi_gpu():
     """
