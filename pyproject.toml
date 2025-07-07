@@ -3,30 +3,33 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "unsloth"
+name = "pantheraml"
 dynamic = ["version"]
-description = "2-5X faster LLM finetuning"
+description = "2-5X faster LLM finetuning with multi-GPU support"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
 license = {text = "Apache-2.0"}
-keywords = ["ai", "llm",]
+keywords = ["ai", "llm", "multi-gpu", "distributed"]
 authors = [
-    {email = "info@unsloth.ai"},
-    {name = "Unsloth AI team"},
+    {email = "info@pantheraml.ai"},
+    {name = "PantheraML AI team"},
 ]
 maintainers = [
     {name = "Daniel Han", email = "danielhanchen@gmail.com"},
-    {name = "Michael Han", email = "info@unsloth.ai"},
+    {name = "Michael Han", email = "info@pantheraml.ai"},
 ]
 classifiers = [
     "Programming Language :: Python",
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "unsloth.models._utils.__version__"}
+version = {attr = "pantheraml.models._utils.__version__"}
 
 [tool.setuptools]
 include-package-data = false
+
+[project.scripts]
+pantheraml-cli = "pantheraml-cli:main"
 
 [tool.setuptools.packages.find]
 exclude = ["images*", "tests*", "kernels/moe*"]

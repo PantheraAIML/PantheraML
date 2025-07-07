@@ -170,6 +170,72 @@ def run(args):
         print("Warning: The model is not saved!")
 
 
+def run_benchmark(args):
+    """Run benchmarking with the specified model."""
+    from pantheraml import FastLanguageModel, benchmark_mmlu, benchmark_hellaswag, benchmark_arc, PantheraBench
+    
+    print("🧪 PantheraML Benchmarking Mode")
+    print("=" * 50)
+    
+    # Load model and tokenizer
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=args.model_name,
+        max_seq_length=args.max_seq_length,
+        dtype=args.dtype,
+        load_in_4bit=args.load_in_4bit,
+    )
+    
+    print(f"✅ Model loaded: {args.model_name}")
+    
+    # Run benchmarks based on selection
+    results = {}
+    
+    if args.benchmark_type == "all" or "mmlu" in args.benchmark_type:
+        print("\n🧠 Running MMLU benchmark...")
+        result = benchmark_mmlu(
+            model, tokenizer, 
+            num_samples=args.max_samples,
+            export=args.export,
+            export_path=f"{args.output_dir}/mmlu_results" if args.export else None
+        )
+        results["MMLU"] = result
+        print(f"✅ MMLU: {result.accuracy:.2%} accuracy")
+    
+    if args.benchmark_type == "all" or "hellaswag" in args.benchmark_type:
+        print("\n🤔 Running HellaSwag benchmark...")
+        result = benchmark_hellaswag(
+            model, tokenizer,
+            num_samples=args.max_samples, 
+            export=args.export,
+            export_path=f"{args.output_dir}/hellaswag_results" if args.export else None
+        )
+        results["HellaSwag"] = result
+        print(f"✅ HellaSwag: {result.accuracy:.2%} accuracy")
+    
+    if args.benchmark_type == "all" or "arc" in args.benchmark_type:
+        print("\n🧪 Running ARC benchmark...")
+        result = benchmark_arc(
+            model, tokenizer,
+            difficulty="challenge",
+            num_samples=args.max_samples,
+            export=args.export,
+            export_path=f"{args.output_dir}/arc_results" if args.export else None
+        )
+        results["ARC"] = result
+        print(f"✅ ARC: {result.accuracy:.2%} accuracy")
+    
+    # Summary
+    print("\n🎯 Benchmark Summary")
+    print("=" * 30)
+    for name, result in results.items():
+        print(f"{name:12} | {result.accuracy:.2%} | {result.execution_time:.1f}s")
+    
+    if args.export:
+        print(f"\n💾 Results exported to: {args.output_dir}/")
+    
+    print("\n🎉 Benchmarking complete!")
+
+
 if __name__ == "__main__":
 
     # Define argument parser
@@ -244,6 +310,17 @@ Happy fine-tuning! 🎯
     push_group.add_argument('--hub_path', type=str, default="hf/model", help="Path on Hugging Face hub to push the model")
     push_group.add_argument('--hub_token', type=str, help="Token for pushing the model to Hugging Face hub")
 
+    # Benchmarking arguments
+    bench_group = parser.add_argument_group('🧪 Benchmarking Options')
+    bench_group.add_argument('--benchmark', action='store_true', help="Run benchmarking instead of training")
+    bench_group.add_argument('--benchmark_type', type=str, nargs='+', default=["mmlu"], 
+                            choices=["mmlu", "hellaswag", "arc", "all"],
+                            help="Which benchmarks to run (default: mmlu)")
+    bench_group.add_argument('--max_samples', type=int, default=None, 
+                            help="Maximum number of samples per benchmark (default: all)")
+    bench_group.add_argument('--export', action='store_true', 
+                            help="Export benchmark results to JSON/CSV")
+
     args = parser.parse_args()
     
     # Print startup banner with credits
@@ -254,4 +331,8 @@ Happy fine-tuning! 🎯
     print("="*72)
     print()
     
-    run(args)
+    # Run benchmarking or training based on mode
+    if args.benchmark:
+        run_benchmark(args)
+    else:
+        run(args)

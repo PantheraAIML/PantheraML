@@ -1,26 +1,39 @@
 <div align="center">
 
-  <a href="https://unsloth.ai"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/unslothai/unsloth/main/images/unsloth%20logo%20white%20text.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/unslothai/unsloth/main/images/unsloth%20logo%20black%20text.png">
-    <img alt="unsloth logo" src="https://raw.githubusercontent.com/unslothai/unsloth/main/images/unsloth%20logo%20black%20text.png" height="110" style="max-width: 100%;">
-  </picture></a>
-  
+# 🦥 PantheraML
+
+**Enhanced LLM Fine-tuning with Multi-GPU Support**
+
+*Built on the excellent foundation of Unsloth*
+
 <a href="https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Llama3.1_(8B)-Alpaca.ipynb"><img src="https://raw.githubusercontent.com/unslothai/unsloth/main/images/start free finetune button.png" width="154"></a>
 <a href="https://discord.com/invite/unsloth"><img src="https://raw.githubusercontent.com/unslothai/unsloth/main/images/Discord button.png" width="165"></a>
 <a href="https://docs.unsloth.ai"><img src="https://raw.githubusercontent.com/unslothai/unsloth/refs/heads/main/images/Documentation%20Button.png" width="137"></a>
 
 ### Finetune Gemma 3n, Qwen3, Llama 4, Phi-4 & Mistral 2x faster with 80% less VRAM!
+### 🚀 Now with Multi-GPU Support!
 
 ![](https://i.ibb.co/sJ7RhGG/image-41.png)
 
 </div>
 
+## 🙏 Credits & Acknowledgments
+
+**PantheraML** is built upon the excellent work of the [Unsloth team](https://github.com/unslothai/unsloth). We extend our heartfelt gratitude to Daniel Han-Chen and the entire Unsloth community for creating such an outstanding foundation for efficient LLM fine-tuning.
+
+### What PantheraML Adds:
+- 🔥 **Multi-GPU distributed training** - Scale across multiple GPUs seamlessly
+- 🚀 **Enhanced memory optimization** - Better memory management for large models  
+- 📊 **Advanced monitoring** - Real-time GPU memory and training metrics
+- 🔧 **Extended compatibility** - Support for more model architectures
+
+*Original Unsloth: https://github.com/unslothai/unsloth*
+
 ## ✨ Finetune for Free
 
 Notebooks are beginner friendly. Read our [guide](https://docs.unsloth.ai/get-started/fine-tuning-guide). Add your dataset, click "Run All", and export your finetuned model to GGUF, Ollama, vLLM or Hugging Face.
 
-| Unsloth supports | Free Notebooks | Performance | Memory use |
+| PantheraML supports | Free Notebooks | Performance | Memory use |
 |-----------|---------|--------|----------|
 | **Gemma 3n (4B)**      | [▶️ Start for free](https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Gemma3N_(4B)-Conversational.ipynb)               | 1.5x faster | 50% less |
 | **Qwen3 (14B)**      | [▶️ Start for free](https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Qwen3_(14B)-Reasoning-Conversational.ipynb)               | 2x faster | 70% less |
@@ -39,10 +52,27 @@ Notebooks are beginner friendly. Read our [guide](https://docs.unsloth.ai/get-st
 
 ## ⚡ Quickstart
 
+> **🎯 New!** PantheraML now supports multi-GPU training and experimental TPU support!
+
 - **Install with pip (recommended)** for Linux devices:
+```bash
+pip install pantheraml
 ```
-pip install unsloth
+
+- **Quick Start Example:**
+```python
+import torch
+from pantheraml import FastLanguageModel
+
+# All original Unsloth functionality, enhanced with multi-GPU support!
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name="microsoft/DialoGPT-medium",
+    max_seq_length=2048,
+    dtype=None,  # Auto-detect
+    load_in_4bit=True,
+)
 ```
+
 For Windows install instructions, see [here](https://docs.unsloth.ai/get-started/installing-+-updating/windows-installation).
 
 ## 🦥 Unsloth.ai News
@@ -234,7 +264,7 @@ print(f'pip install --upgrade pip && pip install "unsloth[{x}] @ git+https://git
 > unsloth_cli.py also supports `UNSLOTH_USE_MODELSCOPE=1` to download models and datasets. please remember to use the model and dataset id in the ModelScope community.
 
 ```python
-from unsloth import FastLanguageModel, FastModel
+from pantheraml import FastLanguageModel, FastModel
 import torch
 from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
@@ -332,7 +362,7 @@ RL including DPO, GRPO, PPO, Reward Modelling, Online DPO all work with Unsloth.
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # Optional set GPU device ID
 
-from unsloth import FastLanguageModel
+from pantheraml import FastLanguageModel
 import torch
 from trl import DPOTrainer, DPOConfig
 max_seq_length = 2048
