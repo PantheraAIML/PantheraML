@@ -7,7 +7,7 @@ name = "pantheraml"
 dynamic = ["version"]
 description = "2-5X faster LLM finetuning with multi-GPU support"
 readme = "README.md"
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 keywords = ["ai", "llm", "multi-gpu", "distributed"]
 authors = [
@@ -29,7 +29,7 @@ version = {attr = "pantheraml.models._utils.__version__"}
 include-package-data = false
 
 [project.scripts]
-pantheraml-cli = "pantheraml-cli:main"
+pantheraml-cli = "pantheraml_cli_standalone:main"
 
 [tool.setuptools.packages.find]
 exclude = ["images*", "tests*", "kernels/moe*"]

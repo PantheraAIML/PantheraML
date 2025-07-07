@@ -100,6 +100,13 @@ def get_device_type():
             return "tpu"
     except ImportError:
         pass
+    
+    # Check if we're in development/CLI mode
+    if os.environ.get("PANTHERAML_DEV_MODE", "0") == "1":
+        print("⚠️  WARNING: Running in development mode on unsupported device")
+        print("🚫 PantheraML requires NVIDIA GPUs, Intel GPUs, or TPUs for training")
+        return "cpu"  # Return cpu for development mode
+    
     raise NotImplementedError("PantheraML currently only works on NVIDIA GPUs, Intel GPUs, and TPUs (experimental).")
 pass
 DEVICE_TYPE : str = get_device_type()
