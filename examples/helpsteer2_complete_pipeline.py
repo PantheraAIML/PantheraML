@@ -35,10 +35,29 @@ from datasets import load_dataset
 from transformers import TrainingArguments
 from trl import SFTTrainer
 
-# PantheraML Multi-GPU support
+# PantheraML Multi-GPU support - Define fallback functions first
+def _fallback_setup_multi_gpu(*args, **kwargs):
+    pass
+
+def _fallback_is_multi_gpu_available():
+    return False
+
+def _fallback_get_world_size():
+    return 1
+
+def _fallback_get_rank():
+    return 0
+
+def _fallback_is_main_process():
+    return True
+
+def _fallback_cleanup_distributed():
+    pass
+
+# Try to import PantheraML distributed functions, use fallbacks if not available
 try:
     from pantheraml.distributed import (
-        setup_multi_gpu, 
+        setup_multi_gpu as _pantheraml_setup_multi_gpu, 
         is_multi_gpu_available,
         get_world_size,
         get_rank,
@@ -51,24 +70,13 @@ except ImportError:
     PANTHERAML_DISTRIBUTED_AVAILABLE = False
     print("⚠️ PantheraML distributed training not available")
     
-    # Provide fallback functions for single-GPU mode
-    def setup_multi_gpu(*args, **kwargs):
-        pass
-    
-    def is_multi_gpu_available():
-        return False
-    
-    def get_world_size():
-        return 1
-    
-    def get_rank():
-        return 0
-    
-    def is_main_process():
-        return True
-    
-    def cleanup_distributed():
-        pass
+    # Use fallback functions for single-GPU mode
+    _pantheraml_setup_multi_gpu = _fallback_setup_multi_gpu
+    is_multi_gpu_available = _fallback_is_multi_gpu_available
+    get_world_size = _fallback_get_world_size
+    get_rank = _fallback_get_rank
+    is_main_process = _fallback_is_main_process
+    cleanup_distributed = _fallback_cleanup_distributed
 
 def setup_multi_gpu():
     """
@@ -83,7 +91,7 @@ def setup_multi_gpu():
         
         try:
             # Initialize PantheraML multi-GPU setup
-            success = setup_multi_gpu()
+            success = _pantheraml_setup_multi_gpu()
             if success:
                 print(f"✅ PantheraML multi-GPU training initialized")
                 print(f"📊 World size: {get_world_size()}")
