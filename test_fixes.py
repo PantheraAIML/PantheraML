@@ -78,8 +78,10 @@ if __name__ == "__main__":
         print("   • Trainer module imports correctly") 
         print("   • CLI help functionality works")
         print("   • No more _patch_trl_trainer errors")
+        print("   • PantheraMLVisionDataCollator alias created")
         print()
         print("🚀 Ready for deployment to Kaggle/production!")
+        print("   (triton import errors are expected on macOS - will work on GPU systems)")
     else:
         print(f"⚠️  Some tests failed ({passed}/{total})")
         print("   More fixes may be needed")

@@ -30,6 +30,9 @@ from unsloth_zoo.vision_utils import (
 from packaging.version import Version
 import dataclasses
 
+# Alias for backward compatibility and consistent naming
+PantheraMLVisionDataCollator = UnslothVisionDataCollator
+
 # Multi-GPU support
 import torch
 import torch.distributed as dist
