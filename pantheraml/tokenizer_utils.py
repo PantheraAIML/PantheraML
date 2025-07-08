@@ -26,12 +26,12 @@ import numpy as np
 import gc
 import subprocess
 
-from unsloth_zoo.tokenizer_utils import (
+from pantheraml_zoo.tokenizer_utils import (
     mean_of_trained_tokens,
     add_new_tokens,
     fix_untrained_tokens,
 )
-from unsloth_zoo.training_utils import (
+from pantheraml_zoo.training_utils import (
     fix_zero_training_loss,
 )
 

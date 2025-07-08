@@ -23,7 +23,7 @@ import requests
 import torch
 import gc
 import time
-from unsloth_zoo.vllm_utils import (
+from pantheraml_zoo.vllm_utils import (
     load_vllm,
     patch_vllm,
     delete_vllm,

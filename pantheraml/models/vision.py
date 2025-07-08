@@ -34,7 +34,7 @@ from ..save import patch_saving_functions
 from peft import LoraConfig, TaskType, get_peft_model as _get_peft_model
 from peft import PeftModelForCausalLM
 from transformers import set_seed as transformers_set_seed
-from unsloth_zoo.peft_utils import (
+from pantheraml_zoo.peft_utils import (
     get_peft_regex,
     SKIP_QUANTIZATION_MODULES,
     requires_grad_for_gradient_checkpointing,
@@ -42,9 +42,9 @@ from unsloth_zoo.peft_utils import (
 from transformers.models.llama.modeling_llama import logger
 from transformers import __version__ as transformers_version
 from triton import __version__ as triton_version
-from unsloth_zoo.utils import _get_dtype
-from unsloth_zoo.patching_utils import patch_model_and_tokenizer
-from unsloth_zoo.training_utils import prepare_model_for_training
+from pantheraml_zoo.utils import _get_dtype
+from pantheraml_zoo.patching_utils import patch_model_and_tokenizer
+from pantheraml_zoo.training_utils import prepare_model_for_training
 import types
 import functools
 import os
@@ -80,7 +80,7 @@ _compile_config = CompileConfig(
 )
 _compile_config.disable = True # Must set manually
 
-from unsloth_zoo.vllm_utils import (
+from pantheraml_zoo.vllm_utils import (
     convert_lora_modules,
     return_lora_modules,
 )

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unsloth_zoo.utils import Version
+from pantheraml_zoo.utils import Version
 from bitsandbytes.nn import Linear4bit as Bnb_Linear4bit
 from peft.tuners.lora import Linear4bit as Peft_Linear4bit
 from peft.tuners.lora import Linear as Peft_Linear
@@ -2227,11 +2227,11 @@ pass
 
 
 from .models.loader_utils import get_model_name
-from unsloth_zoo.saving_utils import (
+from pantheraml_zoo.saving_utils import (
     merge_and_overwrite_lora,
     prepare_saving,
 )
-from unsloth_zoo.llama_cpp import (
+from pantheraml_zoo.llama_cpp import (
     install_llama_cpp,
     convert_to_gguf as _convert_to_gguf,
 )

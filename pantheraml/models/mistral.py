@@ -35,7 +35,7 @@ except:
     MistralSdpaAttention   = MistralAttention
     MistralFlashAttention2 = MistralAttention
 pass
-from unsloth_zoo.utils import Version, _get_dtype
+from pantheraml_zoo.utils import Version, _get_dtype
 
 
 def MistralAttention_fast_forward(

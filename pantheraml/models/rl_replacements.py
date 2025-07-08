@@ -25,7 +25,7 @@ import re
 import torch
 import inspect
 from collections import defaultdict
-from unsloth_zoo.rl_replacements import RL_REPLACEMENTS
+from pantheraml_zoo.rl_replacements import RL_REPLACEMENTS
 RL_EXTRA_ARGS      = defaultdict(list)
 RL_FUNCTIONS       = defaultdict(list)
 RL_PRE_ITEMS       = defaultdict(list)
@@ -45,8 +45,8 @@ def sft_trainer_fix_untrained_tokens(call_args, extra_args):
     if "model" in call_args and "train_dataset" in call_args:
         fix_tokenizer = \
         "IGNORED_TOKENIZER_NAMES = os.environ.get('UNSLOTH_IGNORED_TOKENIZER_NAMES', '').split('\\n')\n"\
-        "from unsloth_zoo.tokenizer_utils import fix_untrained_tokens\n"\
-        "from unsloth_zoo.training_utils  import fix_zero_training_loss\n"\
+        "from pantheraml_zoo.tokenizer_utils import fix_untrained_tokens\n"\
+        "from pantheraml_zoo.training_utils  import fix_zero_training_loss\n"\
         "if 'tokenizer' not in locals(): tokenizer = processing_class\n"\
         "fix_untrained_tokens(model, tokenizer, train_dataset, IGNORED_TOKENIZER_NAMES, eps = 1e-16)\n"\
         "fix_zero_training_loss(model, tokenizer, train_dataset)\n"

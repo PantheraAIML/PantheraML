@@ -148,7 +148,7 @@ def setup_model_and_tokenizer(model_name="Qwen/Qwen2.5-0.5B-Instruct",
         lora_alpha=16,
         lora_dropout=0,  # Supports any value, but = 0 is optimized
         bias="none",     # Supports any value, but = "none" is optimized
-        use_gradient_checkpointing="unsloth",  # Must use "unsloth" (not "pantheraml") for compatibility with unsloth_zoo
+        use_gradient_checkpointing="unsloth",  # Must use "unsloth" (not "pantheraml") for compatibility with pantheraml_zoo
         random_state=3407,
         use_rslora=False,   # Support rank stabilized LoRA
         loftq_config=None,  # And LoftQ

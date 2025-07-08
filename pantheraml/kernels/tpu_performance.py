@@ -480,93 +480,73 @@ class TPUCommunicationOptimizer:
             return dataloader
 
 
-# Aliases for compatibility and consistent naming
-XLAAttentionOptimizer = TPUAttentionOptimizer
-ModelShardManager = TPUModelSharding  
-DynamicShapeManager = TPUDynamicShapeHandler
-# TPUCommunicationOptimizer already has the correct name
+# Global Phase 2 instances
+tpu_attention_optimizer = TPUAttentionOptimizer()
+tpu_model_sharding = TPUModelSharding()
+tpu_dynamic_shape_handler = TPUDynamicShapeHandler()
+tpu_communication_optimizer = TPUCommunicationOptimizer()
 
-# Create a performance profiler class
-class TPUPerformanceProfiler:
-    """
-    Performance profiler for TPU training with detailed metrics collection.
-    """
+
+def initialize_phase2_optimizations(num_cores: int = 8) -> bool:
+    """Initialize Phase 2 TPU optimizations."""
+    if not TPU_AVAILABLE:
+        print("⚠️ TPU: Phase 2 requires XLA libraries")
+        return False
     
-    def __init__(self, enable_detailed: bool = False):
-        self.enable_detailed = enable_detailed
-        self.step_times = []
-        self.memory_stats = []
-        self.communication_stats = []
-        self.compilation_stats = []
-        self.current_step_start = None
+    if not PHASE1_AVAILABLE:
+        print("⚠️ TPU: Phase 2 requires Phase 1 to be initialized first")
+        return False
+    
+    try:
+        print("🚀 TPU: Initializing Phase 2 performance optimizations...")
         
-    def start_step(self):
-        """Start timing a training step."""
-        import time
-        self.current_step_start = time.time()
+        # Initialize components
+        global tpu_model_sharding, tpu_communication_optimizer
+        tpu_model_sharding = TPUModelSharding(num_cores)
+        tpu_communication_optimizer = TPUCommunicationOptimizer(num_cores)
         
-    def end_step(self):
-        """End timing a training step."""
-        if self.current_step_start is not None:
-            import time
-            step_time = time.time() - self.current_step_start
-            self.step_times.append(step_time)
-            self.current_step_start = None
-    
-    def record_step_metrics(self, step: int, loss: float):
-        """Record metrics for a training step."""
-        if TPU_AVAILABLE and xm:
-            # Record memory usage if available
-            try:
-                memory_info = xm.get_memory_info(xm.xla_device())
-                self.memory_stats.append({
-                    'step': step,
-                    'loss': loss,
-                    'memory_info': memory_info
-                })
-            except:
-                pass
-    
-    def start_distributed_profiling(self):
-        """Start distributed profiling across TPU cores."""
-        if TPU_AVAILABLE and xm:
-            print(f"🧪 TPU: Starting profiling on rank {xm.get_ordinal()}")
-    
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get collected performance metrics."""
-        metrics = {
-            'step_times': self.step_times,
-            'avg_step_time': sum(self.step_times) / len(self.step_times) if self.step_times else 0,
-            'total_steps': len(self.step_times),
-            'memory_stats': self.memory_stats,
-            'communication_stats': self.communication_stats
+        # Benchmark communication if possible
+        benchmarks = tpu_communication_optimizer.benchmark_communication()
+        if benchmarks:
+            print("✅ TPU: Communication benchmarking completed")
+        
+        print("✅ TPU: Phase 2 optimizations initialized successfully")
+        return True
+        
+    except Exception as e:
+        if tpu_error_handler:
+            tpu_error_handler.handle_tpu_error("initialize_phase2", e)
+        print(f"⚠️ TPU: Phase 2 initialization failed: {e}")
+        return False
+
+
+def get_phase2_status() -> Dict[str, Any]:
+    """Get comprehensive Phase 2 status information."""
+    status = {
+        "phase2_available": TPU_AVAILABLE and PHASE1_AVAILABLE,
+        "components": {
+            "attention_optimizer": tpu_attention_optimizer is not None,
+            "model_sharding": tpu_model_sharding is not None,
+            "dynamic_shape_handler": tpu_dynamic_shape_handler is not None,
+            "communication_optimizer": tpu_communication_optimizer is not None,
         }
-        
-        if self.enable_detailed:
-            metrics['detailed_stats'] = {
-                'compilation_stats': self.compilation_stats,
-                'profiler_enabled': True
-            }
-        
-        return metrics
+    }
     
-    def finalize(self):
-        """Finalize profiling and cleanup."""
-        if TPU_AVAILABLE:
-            print(f"🧪 TPU: Profiling completed - {len(self.step_times)} steps recorded")
+    if tpu_model_sharding:
+        status["num_cores"] = tpu_model_sharding.num_cores
+    
+    if tpu_attention_optimizer:
+        status["compiled_attention_funcs"] = len(tpu_attention_optimizer.compiled_attention_funcs)
+    
+    return status
 
-# Update the __all__ list
+
+# Export public interface
 __all__ = [
     "TPUAttentionOptimizer",
-    "TPUModelSharding", 
-    "TPUDynamicShapeHandler",
+    "TPUModelSharding",
+    "TPUDynamicShapeHandler", 
     "TPUCommunicationOptimizer",
-    "TPUPerformanceProfiler",
-    # Aliases
-    "XLAAttentionOptimizer",
-    "ModelShardManager",
-    "DynamicShapeManager",
-    # Functions
     "initialize_phase2_optimizations",
     "get_phase2_status",
     "tpu_attention_optimizer",

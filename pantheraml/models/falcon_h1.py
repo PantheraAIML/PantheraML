@@ -15,7 +15,7 @@
 from .llama import *
 import os
 from ._utils import __version__
-from unsloth_zoo.utils import Version, _get_dtype
+from pantheraml_zoo.utils import Version, _get_dtype
 from .llama import (
     LlamaRotaryEmbedding,
     LlamaLinearScalingRotaryEmbedding,

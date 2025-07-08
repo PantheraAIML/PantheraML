@@ -55,7 +55,7 @@ from .flex_attention import (
 )
 
 import os
-if "UNSLOTH_ZOO_IS_PRESENT" not in os.environ:
+if "PANTHERAML_ZOO_IS_PRESENT" not in os.environ:
     try:
         print("🐾 PantheraML: Will patch your computer to enable 2x faster free finetuning.")
     except:

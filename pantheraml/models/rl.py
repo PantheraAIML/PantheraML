@@ -23,9 +23,9 @@ import inspect
 import os
 import re
 import torch
-from unsloth_zoo.compiler import create_new_function
-from unsloth_zoo.logging_utils import PatchRLStatistics
-from unsloth_zoo.rl_replacements import RL_REPLACEMENTS
+from pantheraml_zoo.compiler import create_new_function
+from pantheraml_zoo.logging_utils import PatchRLStatistics
+from pantheraml_zoo.rl_replacements import RL_REPLACEMENTS
 from .rl_replacements import (
     RL_EXTRA_ARGS,
     RL_FUNCTIONS,
@@ -246,7 +246,7 @@ def _patch_trl_rl_trainers(trainer_file = "grpo_trainer"):
         "mixed_precision_dtype = os.environ.get('UNSLOTH_MIXED_PRECISION', 'float32')\n"\
         "dtype = getattr(model.config, 'torch_dtype', None)\n"\
         "if dtype is None: dtype = model.get_input_embeddings().dtype\n"\
-        "from unsloth_zoo.utils import _get_dtype\n"\
+        "from pantheraml_zoo.utils import _get_dtype\n"\
         "dtype = _get_dtype(dtype)\n"\
         "float16 = dtype == torch.float16\n"\
         "if not force_float32 and (float16 and use_bf16): raise TypeError('Unsloth: Model is in float16 precision but you want to use bfloat16 precision. Set fp16 to `True` and bf16 to `False`')\n"\
@@ -286,7 +286,7 @@ def _patch_trl_rl_trainers(trainer_file = "grpo_trainer"):
         "    from transformers import __version__ as transformers_version\n"\
         "    if Version(transformers_version) <= Version('4.45.2'):\n"\
         "        print('**** Unsloth: Please use our fixed gradient_accumulation_steps by updating transformers, TRL and Unsloth!\\n'\n"\
-        "              '`pip install --upgrade --no-cache-dir --force-reinstall --no-deps unsloth transformers trl unsloth_zoo`')\n"
+        "              '`pip install --upgrade --no-cache-dir --force-reinstall --no-deps unsloth transformers trl pantheraml_zoo`')\n"
         extra_args += check_ga
 
         eval_changes = \
@@ -386,7 +386,7 @@ def _patch_trl_rl_trainers(trainer_file = "grpo_trainer"):
     if "data_collator" in call_args and "train_dataset" in call_args:
         data_collator_check = \
         "__tokenizer = processing_class if 'processing_class' in locals() else tokenizer\n"\
-        "from unsloth_zoo.vision_utils import UnslothVisionDataCollator\n"\
+        "from pantheraml_zoo.vision_utils import UnslothVisionDataCollator\n"\
         "if not isinstance(data_collator, UnslothVisionDataCollator):\n"\
         "    if isinstance(data_collator, DataCollatorForSeq2Seq) and 'labels' not in train_dataset.column_names:\n"\
         "        data_collator = TransformersDataCollatorForLanguageModeling(__tokenizer, mlm = False, mlm_probability = 0.0)\n"\
@@ -433,7 +433,7 @@ def _patch_trl_rl_trainers(trainer_file = "grpo_trainer"):
     extra_args += \
         "other_metrics = []\n"\
         f"{other_metrics_processor}\n"\
-        "from unsloth_zoo.logging_utils import PatchRLStatistics\n"\
+        "from pantheraml_zoo.logging_utils import PatchRLStatistics\n"\
         f"PatchRLStatistics('{trainer_file}', other_metrics)\n"
 
     # Patch optional args

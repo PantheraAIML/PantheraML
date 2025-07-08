@@ -42,7 +42,7 @@ from transformers.models.qwen3_moe.modeling_qwen3_moe import (
 #     Qwen3SdpaAttention   = Qwen3Attention
 #     Qwen3FlashAttention2 = Qwen3Attention
 # pass
-from unsloth_zoo.utils import Version, _get_dtype
+from pantheraml_zoo.utils import Version, _get_dtype
 
 
 torch_nn_functional_softmax = torch.nn.functional.softmax

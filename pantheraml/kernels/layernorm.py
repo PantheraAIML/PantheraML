@@ -17,7 +17,7 @@ import triton
 import triton.language as tl
 import torch
 from .utils import calculate_settings, torch_gpu_device
-from unsloth_zoo.patching_utils import (
+from pantheraml_zoo.patching_utils import (
     patch_layernorm,
 )
 

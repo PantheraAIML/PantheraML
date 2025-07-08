@@ -46,7 +46,7 @@ from huggingface_hub import HfFileSystem
 import importlib.util
 
 # https://github.com/huggingface/transformers/pull/26037 allows 4 bit loading!
-from unsloth_zoo.utils import Version, _get_dtype
+from pantheraml_zoo.utils import Version, _get_dtype
 transformers_version = Version(transformers_version)
 SUPPORTS_FOURBIT   = transformers_version >= Version("4.37")
 SUPPORTS_GEMMA     = transformers_version >= Version("4.38")
@@ -428,7 +428,7 @@ class FastLanguageModel(FastLlamaModel):
                 print("Unsloth: vLLM is not installed! Will use Unsloth inference!")
                 fast_inference = False
             pass
-            from unsloth_zoo.vllm_utils import (
+            from pantheraml_zoo.vllm_utils import (
                 patch_vllm, 
                 vllm_dynamic_quant_supported,
             )
@@ -645,7 +645,7 @@ class FastModel(FastBaseModel):
             os.environ["UNSLOTH_FORCE_CUSTOM_DTYPE"] = \
                 "float16;torch.float16;torch.float16;"\
                 "if name.endswith(('.conv')): module;"\
-                "from unsloth_zoo.temporary_patches.gemma3n import patch_Gemma3nConvNormAct_forward; patch_Gemma3nConvNormAct_forward()"
+                "from pantheraml_zoo.temporary_patches.gemma3n import patch_Gemma3nConvNormAct_forward; patch_Gemma3nConvNormAct_forward()"
             
             if transformers_version < Version("4.53.0"):
                 raise RuntimeError("PantheraML: Gemma 3N only works on transformers >= 4.53.0" + LATEST)

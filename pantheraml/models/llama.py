@@ -22,8 +22,8 @@ from ._utils import patch_unsloth_smart_gradient_checkpointing
 from ._utils import __version__
 from torch.nn.functional import scaled_dot_product_attention
 from transformers import __version__ as transformers_version
-from unsloth_zoo.utils import Version, _get_dtype
-from unsloth_zoo.peft_utils import SKIP_QUANTIZATION_MODULES
+from pantheraml_zoo.utils import Version, _get_dtype
+from pantheraml_zoo.peft_utils import SKIP_QUANTIZATION_MODULES
 from pantheraml import DEVICE_TYPE
 
 transformers_version = Version(transformers_version)
@@ -1924,7 +1924,7 @@ class FastLlamaModel:
             model.fast_generate = model.generate
             model.fast_generate_batches = None
         else:
-            from unsloth_zoo.vllm_utils import (
+            from pantheraml_zoo.vllm_utils import (
                 load_vllm,
                 get_vllm_state_dict,
                 convert_vllm_to_huggingface,
@@ -2590,7 +2590,7 @@ class FastLlamaModel:
             model.fast_generate_batches = vllm_fast_generate_batches
 
             # Also saving and loading LoRA
-            from unsloth_zoo.vllm_utils import save_lora, load_lora
+            from pantheraml_zoo.vllm_utils import save_lora, load_lora
             model.save_lora = functools.partial(save_lora, model)
             model.load_lora = functools.partial(load_lora, model)
         pass
@@ -2807,7 +2807,7 @@ class FastLlamaModel:
             model.fast_generate_batches = model.model.fast_generate_batches
 
             # Also saving and loading LoRA
-            from unsloth_zoo.vllm_utils import save_lora, load_lora
+            from pantheraml_zoo.vllm_utils import save_lora, load_lora
             model.save_lora = functools.partial(save_lora, model)
             model.load_lora = functools.partial(load_lora, model)
         pass

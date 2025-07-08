@@ -101,13 +101,11 @@ def get_device_type():
     except ImportError:
         pass
     
-    # Check if we're in development/testing mode
-    if (os.environ.get("PANTHERAML_DEV_MODE", "0") == "1" or 
-        os.environ.get("PANTHERAML_TESTING", "0") == "1" or
-        "test_" in sys.argv[0] if len(sys.argv) > 0 else False):
-        print("⚠️  WARNING: Running in development/testing mode on unsupported device")
+    # Check if we're in development/CLI mode
+    if os.environ.get("PANTHERAML_DEV_MODE", "0") == "1":
+        print("⚠️  WARNING: Running in development mode on unsupported device")
         print("🚫 PantheraML requires NVIDIA GPUs, Intel GPUs, or TPUs for training")
-        return "cpu"  # Return cpu for development/testing mode
+        return "cpu"  # Return cpu for development mode
     
     raise NotImplementedError("PantheraML currently only works on NVIDIA GPUs, Intel GPUs, and TPUs (experimental).")
 pass
@@ -287,26 +285,29 @@ elif DEVICE_TYPE == "xpu":
     # TODO: check triton for intel installed properly.
     pass
 
-# Check for unsloth_zoo
+# Check for PantheraML Zoo (TPU-enabled fork of unsloth_zoo)
 try:
-    unsloth_zoo_version = importlib_version("unsloth_zoo")
-    if Version(unsloth_zoo_version) < Version("2025.4.1"):
-        pass
-        # print(
-        #     "Unsloth: Updating Unsloth-Zoo utilies to the latest version.\n"\
-        #     "To disable this, set `os.environ['UNSLOTH_DISABLE_AUTO_UPDATES'] = '1'`"
-        # )
-        # if os.environ.get("UNSLOTH_DISABLE_AUTO_UPDATES", "0") == "0":
-        #     try:
-        #         os.system("pip install --upgrade --no-cache-dir --no-deps unsloth_zoo")
-        #     except:
-        #         try:
-        #             os.system("pip install --upgrade --no-cache-dir --no-deps --user unsloth_zoo")
-        #         except:
-        #             raise ImportError("Unsloth: Please update unsloth_zoo via `pip install --upgrade --no-cache-dir --no-deps unsloth_zoo`")
-    import unsloth_zoo
-except:
-    raise ImportError("PantheraML: Please install unsloth_zoo via `pip install unsloth_zoo`")
+    # Try PantheraML Zoo first (our TPU-enabled fork)
+    try:
+        pantheraml_zoo_version = importlib_version("pantheraml_zoo")
+        import pantheraml_zoo as unsloth_zoo
+        print("✅ PantheraML Zoo loaded (TPU support enabled)")
+    except ImportError:
+        # Fallback to original unsloth_zoo with warning
+        try:
+            unsloth_zoo_version = importlib_version("unsloth_zoo")
+            import unsloth_zoo
+            print("⚠️ Using original unsloth_zoo (limited TPU support)")
+            print("   For full TPU support, install: pip install git+https://github.com/PantheraAIML/PantheraML-Zoo.git")
+        except ImportError:
+            raise ImportError(
+                "PantheraML requires PantheraML Zoo for optimal performance.\n"
+                "Install with: pip install git+https://github.com/PantheraAIML/PantheraML-Zoo.git\n"
+                "Or fallback: pip install unsloth_zoo"
+            )
+except Exception as e:
+    print(f"Warning: Zoo import failed: {e}")
+    print("Some features may be limited without PantheraML Zoo")
 pass
 
 from .models import *
