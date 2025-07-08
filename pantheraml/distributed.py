@@ -15,7 +15,7 @@
 import os
 import torch
 import torch.distributed as dist
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable
 import logging
 import warnings
 from contextlib import contextmanager
