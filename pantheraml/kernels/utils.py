@@ -187,11 +187,22 @@ else:
         (index := torch.cuda.device(i).idx) : ctypes.c_void_p(torch._C._cuda_getCurrentRawStream(index))
         for i in range(torch.cuda.device_count())
     }
-    CUDA_STREAMS   = [None] * (max(_CUDA_STREAMS.keys()) + 1)
-    WEIGHT_BUFFERS = [None] * (max(_CUDA_STREAMS.keys()) + 1)
-    ABSMAX_BUFFERS = [None] * (max(_CUDA_STREAMS.keys()) + 1)
-    for k, v in _CUDA_STREAMS.items(): CUDA_STREAMS[k] = v
-    CUDA_STREAMS = tuple(CUDA_STREAMS)
+    
+    # Handle case where no CUDA devices are available
+    if _CUDA_STREAMS:
+        max_device_index = max(_CUDA_STREAMS.keys())
+        CUDA_STREAMS   = [None] * (max_device_index + 1)
+        WEIGHT_BUFFERS = [None] * (max_device_index + 1)
+        ABSMAX_BUFFERS = [None] * (max_device_index + 1)
+        for k, v in _CUDA_STREAMS.items(): 
+            CUDA_STREAMS[k] = v
+        CUDA_STREAMS = tuple(CUDA_STREAMS)
+    else:
+        # No CUDA devices available - create empty tuples
+        CUDA_STREAMS   = ()
+        WEIGHT_BUFFERS = []
+        ABSMAX_BUFFERS = []
+    
     del _CUDA_STREAMS
 
 
