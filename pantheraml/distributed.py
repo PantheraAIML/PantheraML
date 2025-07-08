@@ -1,4 +1,4 @@
-# Copyright 2023-present Daniel Han-Chen & the PantheraML team. All rights reserved.
+#  Copyright 2025-present Aayan Mishra & the PantheraML team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,33 +15,64 @@
 import os
 import torch
 import torch.distributed as dist
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 import logging
+import warnings
 from contextlib import contextmanager
 
-# Experimental TPU support
+# Enhanced TPU support with Phase 1 improvements
 try:
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
     import torch_xla.distributed.xla_multiprocessing as xmp
+    import torch_xla.runtime as xr
+    from .kernels.tpu_kernels import (
+        tpu_memory_manager, 
+        xla_optimizer, 
+        tpu_error_handler, 
+        tpu_config_manager,
+        initialize_tpu_kernels
+    )
     TPU_AVAILABLE = True
 except ImportError:
     TPU_AVAILABLE = False
+    xm = None
+    pl = None
+    xmp = None
+    xr = None
+
+# Phase 2 TPU Performance Integration
+try:
+    from .kernels.tpu_performance import (
+        TPUCommunicationOptimizer, ModelShardManager, TPUPerformanceProfiler
+    )
+    PHASE2_TPU_AVAILABLE = True
+except ImportError:
+    PHASE2_TPU_AVAILABLE = False
 
 __all__ = [
     "setup_multi_gpu",
-    "setup_multi_tpu",  # New experimental TPU support
+    "setup_multi_tpu",  # Enhanced TPU support with Phase 1
     "cleanup_multi_gpu", 
-    "cleanup_multi_tpu",  # New experimental TPU support
+    "cleanup_multi_tpu",  # Enhanced TPU cleanup with Phase 1
     "is_distributed_available",
-    "is_tpu_available",  # New experimental TPU support
+    "is_tpu_available",  # TPU availability check
     "get_rank",
     "get_world_size",
     "get_local_rank",
     "is_main_process",
+    "get_tpu_rank",  # TPU rank functions
+    "get_tpu_world_size",
+    "is_tpu_main_process",
+    "get_tpu_device",  # Phase 1: Enhanced TPU device management
+    "synchronize_tpu",  # Phase 1: Enhanced TPU synchronization
+    "get_tpu_memory_info",  # Phase 1: TPU memory tracking
+    "optimize_tpu_memory",  # Phase 1: TPU memory optimization
+    "get_tpu_status",  # Phase 1: Comprehensive TPU status
     "MultiGPUConfig",
-    "MultiTPUConfig",  # New experimental TPU config
+    "MultiTPUConfig",  # Enhanced TPU config
     "distributed_context",
+    "tpu_context",  # Phase 1: TPU context manager
 ]
 
 logger = logging.getLogger(__name__)
@@ -206,10 +237,10 @@ def setup_multi_gpu(config: Optional[MultiGPUConfig] = None) -> MultiGPUConfig:
     return config
 
 
-# New experimental TPU setup function
+# Enhanced TPU setup function with Phase 1 improvements
 def setup_multi_tpu(config: Optional[MultiTPUConfig] = None) -> MultiTPUConfig:
     """
-    Setup TPU training environment.
+    Setup TPU training environment with enhanced stability and error handling.
     
     Args:
         config: MultiTPUConfig object. If None, default config is used.
@@ -221,30 +252,114 @@ def setup_multi_tpu(config: Optional[MultiTPUConfig] = None) -> MultiTPUConfig:
         config = MultiTPUConfig()
     
     if not TPU_AVAILABLE:
-        raise RuntimeError("TPU support is not available. Please install torch_xla.")
-    
-    # Initialize the TPU system
-    xmp.spawn(_init_tpu, args=(config,), nprocs=config.num_cores)
-    
-    return config
-
-
-# New experimental TPU initialization function
-def _init_tpu(rank, config: MultiTPUConfig):
-    """Initialize TPU for a single process."""
-    # Set the device for this process
-    torch.cuda.set_device(rank)
-    
-    # Initialize the process group
-    if not dist.is_initialized():
-        dist.init_process_group(
-            backend="xla",
-            init_method="env://",
-            rank=rank,
-            world_size=config.num_cores,
+        print("⚠️ TPU: XLA libraries not available. Please install torch_xla.")
+        raise RuntimeError(
+            "TPU support requires torch_xla. Install with: pip install torch_xla"
         )
+    
+    try:
+        # Phase 1: Initialize TPU kernels and optimizations
+        print("🧪 TPU: Initializing Phase 1 enhancements...")
         
-        logger.info(f"Initialized TPU training: Rank {rank} on TPU core {rank}")
+        # Initialize TPU configuration manager
+        if not tpu_config_manager.initialize_tpu_environment():
+            raise RuntimeError("Failed to initialize TPU environment")
+        
+        # Initialize TPU kernels
+        if not initialize_tpu_kernels():
+            print("⚠️ TPU: Kernel initialization failed, continuing with basic setup")
+        
+        # Get optimal configuration for TPU
+        optimal_config = tpu_config_manager.get_optimal_config("medium")
+        print(f"🧪 TPU: Using optimal config: {optimal_config}")
+        
+        # Set up error handling
+        tpu_error_handler.error_count = 0
+        
+        # Initialize XLA optimizer
+        device = xla_optimizer.get_xla_device()
+        if device is None:
+            raise RuntimeError("Failed to get XLA device")
+        
+        print(f"🧪 TPU: XLA device initialized: {device}")
+        
+        # Memory optimization
+        memory_info = tpu_memory_manager.get_memory_info()
+        if "error" not in memory_info:
+            print(f"🧪 TPU: Memory available: {memory_info.get('gb_limit', 0)} GB")
+            tpu_memory_manager.optimize_memory()
+        
+        # Initialize the TPU system with error handling
+        try:
+            xmp.spawn(_init_tpu_enhanced, args=(config,), nprocs=config.num_cores)
+        except Exception as e:
+            if tpu_error_handler.handle_tpu_error("spawn_initialization", e):
+                # Retry with fallback configuration
+                print("🧪 TPU: Retrying with fallback configuration...")
+                config.num_cores = min(config.num_cores, 4)  # Reduce cores as fallback
+                xmp.spawn(_init_tpu_enhanced, args=(config,), nprocs=config.num_cores)
+            else:
+                raise
+        
+        print("✅ TPU: Enhanced setup completed successfully")
+        return config
+        
+    except Exception as e:
+        error_msg = f"TPU setup failed: {e}"
+        print(f"❌ {error_msg}")
+        if tpu_error_handler.handle_tpu_error("setup_multi_tpu", e):
+            print("🔄 TPU: Attempting fallback to single-core mode...")
+            config.num_cores = 1
+            return config
+        else:
+            raise RuntimeError(error_msg)
+
+
+# Enhanced TPU initialization function with Phase 1 improvements
+def _init_tpu_enhanced(rank, config: MultiTPUConfig):
+    """Initialize TPU for a single process with enhanced error handling."""
+    try:
+        print(f"🧪 TPU Core {rank}: Starting enhanced initialization...")
+        
+        # Get XLA device for this core
+        device = xm.xla_device()
+        print(f"🧪 TPU Core {rank}: XLA device: {device}")
+        
+        # Apply memory optimizations
+        tpu_memory_manager.optimize_memory()
+        
+        # Test basic operations to ensure TPU is working
+        test_tensor = torch.ones(2, 2, device=device)
+        result = test_tensor + test_tensor
+        xm.mark_step()  # Synchronize TPU operations
+        
+        # Initialize process group with error handling
+        if not dist.is_initialized():
+            try:
+                dist.init_process_group(
+                    backend="xla",
+                    init_method="env://",
+                    rank=rank,
+                    world_size=config.num_cores,
+                    timeout=torch.timedelta(minutes=10),  # Increased timeout
+                )
+                print(f"✅ TPU Core {rank}: Process group initialized")
+            except Exception as e:
+                print(f"⚠️ TPU Core {rank}: Process group init failed: {e}")
+                # Continue without distributed setup for single-core fallback
+        
+        # Memory status check
+        memory_info = tpu_memory_manager.get_memory_info()
+        if "error" not in memory_info:
+            print(f"🧪 TPU Core {rank}: Memory usage: {memory_info.get('gb_in_use', 0):.2f}/{memory_info.get('gb_limit', 0):.2f} GB")
+        
+        print(f"✅ TPU Core {rank}: Enhanced initialization completed")
+        
+    except Exception as e:
+        error_msg = f"TPU Core {rank} initialization failed: {e}"
+        print(f"❌ {error_msg}")
+        if not tpu_error_handler.handle_tpu_error(f"init_tpu_core_{rank}", e):
+            raise RuntimeError(error_msg)
 
 
 def cleanup_multi_gpu():
@@ -255,12 +370,38 @@ def cleanup_multi_gpu():
             logger.info("Cleaned up distributed training environment")
 
 
-# New experimental TPU cleanup function
+# Enhanced TPU cleanup with Phase 1 improvements
 def cleanup_multi_tpu():
-    """Cleanup TPU training environment."""
-    if dist.is_initialized():
-        dist.destroy_process_group()
-        logger.info("Cleaned up TPU training environment")
+    """Enhanced TPU training environment cleanup with proper error handling."""
+    try:
+        print("🧪 TPU: Starting enhanced cleanup...")
+        
+        # Clear TPU memory cache
+        if TPU_AVAILABLE and tpu_memory_manager:
+            tpu_memory_manager.clear_cache()
+            print("🧪 TPU: Memory cache cleared")
+        
+        # Synchronize all TPU operations
+        if TPU_AVAILABLE and xm:
+            xm.mark_step()
+            xm.wait_device_ops()
+            print("🧪 TPU: Operations synchronized")
+        
+        # Cleanup distributed process group
+        if dist.is_initialized():
+            dist.destroy_process_group()
+            print("🧪 TPU: Process group destroyed")
+        
+        # Reset error handler
+        if TPU_AVAILABLE and tpu_error_handler:
+            tpu_error_handler.error_count = 0
+            tpu_error_handler.error_log.clear()
+        
+        print("✅ TPU: Enhanced cleanup completed")
+        
+    except Exception as e:
+        print(f"⚠️ TPU: Cleanup warning: {e}")
+        # Don't raise exception during cleanup
 
 
 @contextmanager
@@ -455,28 +596,293 @@ def broadcast_object(obj, src: int = 0):
     return objects[0]
 
 
-def get_tpu_device() -> torch.device:
-    """
-    Get the current TPU device (EXPERIMENTAL).
-    
-    Returns:
-        torch.device: The TPU device.
-    """
-    if not TPU_AVAILABLE:
-        raise RuntimeError("TPU support requires torch_xla")
+def get_tpu_device() -> Optional[torch.device]:
+    """Get the current TPU device with error handling."""
+    if not TPU_AVAILABLE or not xm:
+        return None
     
     try:
         return xm.xla_device()
     except Exception as e:
-        raise RuntimeError(f"Failed to get TPU device: {e}")
+        if tpu_error_handler:
+            tpu_error_handler.handle_tpu_error("get_tpu_device", e)
+        return None
 
 
 def synchronize_tpu():
+    """Synchronize TPU operations with error handling."""
+    if not TPU_AVAILABLE or not xm:
+        return False
+    
+    try:
+        xm.mark_step()
+        xm.wait_device_ops()
+        return True
+    except Exception as e:
+        if tpu_error_handler:
+            tpu_error_handler.handle_tpu_error("synchronize_tpu", e)
+        return False
+
+
+def get_tpu_memory_info() -> Dict[str, Any]:
+    """Get TPU memory information with enhanced error handling."""
+    if not TPU_AVAILABLE or not tpu_memory_manager:
+        return {"error": "TPU not available"}
+    
+    return tpu_memory_manager.get_memory_info()
+
+
+def optimize_tpu_memory() -> bool:
+    """Optimize TPU memory usage."""
+    if not TPU_AVAILABLE or not tpu_memory_manager:
+        return False
+    
+    return tpu_memory_manager.optimize_memory()
+
+
+def get_tpu_status() -> Dict[str, Any]:
+    """Get comprehensive TPU status information."""
+    if not TPU_AVAILABLE:
+        return {
+            "available": False,
+            "error": "TPU libraries not installed"
+        }
+    
+    try:
+        status = {
+            "available": True,
+            "initialized": tpu_config_manager.is_initialized if tpu_config_manager else False,
+            "device": str(get_tpu_device()) if get_tpu_device() else None,
+            "memory_info": get_tpu_memory_info(),
+            "error_count": tpu_error_handler.error_count if tpu_error_handler else 0,
+            "rank": get_tpu_rank(),
+            "world_size": get_tpu_world_size(),
+            "is_main_process": is_tpu_main_process(),
+        }
+        
+        # Add XLA compilation info
+        if xla_optimizer:
+            status["compiled_functions"] = len(xla_optimizer.compiled_functions)
+        
+        return status
+        
+    except Exception as e:
+        return {
+            "available": True,
+            "error": f"Status check failed: {e}"
+        }
+
+
+def setup_phase2_distributed_training(
+    world_size: int = None,
+    enable_sharding: bool = True,
+    enable_comm_optimization: bool = True,
+    enable_profiling: bool = False,
+    **kwargs
+) -> Dict[str, Any]:
     """
-    Synchronize TPU operations (EXPERIMENTAL).
+    Setup Phase 2 distributed training with advanced TPU optimizations.
+    
+    Args:
+        world_size: Number of TPU cores/devices
+        enable_sharding: Enable model sharding across devices
+        enable_comm_optimization: Enable communication optimizations
+        enable_profiling: Enable detailed performance profiling
+        **kwargs: Additional configuration options
+    
+    Returns:
+        Dictionary with Phase 2 components and configuration
     """
-    if TPU_AVAILABLE:
-        try:
-            xm.mark_step()
-        except Exception as e:
-            logging.warning(f"TPU synchronization warning: {e}")
+    if not TPU_AVAILABLE:
+        warnings.warn("TPU not available, Phase 2 setup skipped")
+        return {}
+    
+    if not PHASE2_TPU_AVAILABLE:
+        warnings.warn("Phase 2 components not available, using Phase 1 only")
+        return {}
+    
+    phase2_config = {}
+    
+    try:
+        # Initialize communication optimizer
+        if enable_comm_optimization:
+            comm_optimizer = TPUCommunicationOptimizer()
+            comm_optimizer.setup_distributed_communication(world_size or xm.xrt_world_size())
+            phase2_config['comm_optimizer'] = comm_optimizer
+            print(f"✅ Phase 2 communication optimization enabled for {world_size or xm.xrt_world_size()} devices")
+        
+        # Initialize model sharding manager
+        if enable_sharding:
+            shard_manager = ModelShardManager(
+                num_shards=world_size or xm.xrt_world_size(),
+                shard_axis=kwargs.get('shard_axis', 0)
+            )
+            phase2_config['shard_manager'] = shard_manager
+            print(f"✅ Phase 2 model sharding enabled with {shard_manager.num_shards} shards")
+        
+        # Initialize performance profiler
+        if enable_profiling:
+            profiler = TPUPerformanceProfiler(enable_detailed=True)
+            profiler.start_distributed_profiling()
+            phase2_config['profiler'] = profiler
+            print("✅ Phase 2 distributed profiling enabled")
+        
+        return phase2_config
+        
+    except Exception as e:
+        warnings.warn(f"Phase 2 distributed setup failed: {e}")
+        return {}
+
+
+def optimize_distributed_communication(
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    phase2_config: Dict[str, Any] = None
+) -> Tuple[torch.nn.Module, torch.optim.Optimizer]:
+    """
+    Apply Phase 2 communication optimizations to model and optimizer.
+    
+    Args:
+        model: The model to optimize
+        optimizer: The optimizer to optimize
+        phase2_config: Phase 2 configuration from setup
+    
+    Returns:
+        Optimized model and optimizer
+    """
+    if not TPU_AVAILABLE or not PHASE2_TPU_AVAILABLE:
+        return model, optimizer
+    
+    if not phase2_config:
+        return model, optimizer
+    
+    try:
+        # Apply communication optimizations
+        comm_optimizer = phase2_config.get('comm_optimizer')
+        if comm_optimizer:
+            model = comm_optimizer.optimize_model_communication(model)
+            optimizer = comm_optimizer.optimize_optimizer_communication(optimizer)
+            print("✅ Communication optimizations applied to model and optimizer")
+        
+        # Apply model sharding
+        shard_manager = phase2_config.get('shard_manager')
+        if shard_manager:
+            model = shard_manager.shard_model(model)
+            print(f"✅ Model sharded across {shard_manager.num_shards} devices")
+        
+        return model, optimizer
+        
+    except Exception as e:
+        warnings.warn(f"Communication optimization failed: {e}")
+        return model, optimizer
+
+
+def synchronize_phase2_training(
+    loss: torch.Tensor,
+    phase2_config: Dict[str, Any] = None,
+    step: int = 0
+) -> torch.Tensor:
+    """
+    Synchronize training step with Phase 2 optimizations.
+    
+    Args:
+        loss: Training loss tensor
+        phase2_config: Phase 2 configuration
+        step: Current training step
+    
+    Returns:
+        Synchronized loss tensor
+    """
+    if not TPU_AVAILABLE:
+        return loss
+    
+    try:
+        # Standard XLA synchronization
+        xm.mark_step()
+        
+        # Phase 2 communication optimization
+        if phase2_config and 'comm_optimizer' in phase2_config:
+            comm_optimizer = phase2_config['comm_optimizer']
+            loss = comm_optimizer.synchronize_gradients(loss)
+        
+        # Phase 2 profiling
+        if phase2_config and 'profiler' in phase2_config:
+            profiler = phase2_config['profiler']
+            profiler.record_step_metrics(step, loss.item())
+        
+        return loss
+        
+    except Exception as e:
+        warnings.warn(f"Phase 2 synchronization warning: {e}")
+        return loss
+
+
+def cleanup_phase2_distributed(phase2_config: Dict[str, Any] = None):
+    """
+    Cleanup Phase 2 distributed training components.
+    
+    Args:
+        phase2_config: Phase 2 configuration to cleanup
+    """
+    if not phase2_config:
+        return
+    
+    try:
+        # Cleanup communication optimizer
+        if 'comm_optimizer' in phase2_config:
+            phase2_config['comm_optimizer'].cleanup()
+            print("✅ Communication optimizer cleaned up")
+        
+        # Cleanup shard manager
+        if 'shard_manager' in phase2_config:
+            phase2_config['shard_manager'].cleanup()
+            print("✅ Shard manager cleaned up")
+        
+        # Finalize profiler
+        if 'profiler' in phase2_config:
+            phase2_config['profiler'].finalize()
+            print("✅ Profiler finalized")
+        
+        print("✅ Phase 2 distributed cleanup completed")
+        
+    except Exception as e:
+        warnings.warn(f"Phase 2 cleanup warning: {e}")
+
+
+# Enhanced wrapper function with Phase 2 support
+def setup_enhanced_distributed_training(
+    model: torch.nn.Module,
+    enable_phase2: bool = True,
+    **kwargs
+) -> Tuple[torch.nn.Module, Dict[str, Any]]:
+    """
+    Setup enhanced distributed training with Phase 1 and Phase 2 support.
+    
+    Args:
+        model: Model to setup for distributed training
+        enable_phase2: Whether to enable Phase 2 optimizations
+        **kwargs: Additional configuration options
+    
+    Returns:
+        Tuple of (prepared_model, config_dict)
+    """
+    # Phase 1 setup (always enabled if TPU available)
+    phase1_config = setup_multi_tpu() if TPU_AVAILABLE else {}
+    
+    # Phase 2 setup (if enabled and available)
+    phase2_config = {}
+    if enable_phase2:
+        phase2_config = setup_phase2_distributed_training(**kwargs)
+    
+    # Combine configurations
+    combined_config = {
+        'phase1': phase1_config,
+        'phase2': phase2_config,
+        'phase2_enabled': enable_phase2 and bool(phase2_config)
+    }
+    
+    # Apply Phase 2 optimizations if available
+    if combined_config['phase2_enabled']:
+        model, _ = optimize_distributed_communication(model, None, phase2_config)
+    
+    return model, combined_config

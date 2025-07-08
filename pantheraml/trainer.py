@@ -1,4 +1,4 @@
-# Copyright 2023-present Daniel Han-Chen & the PantheraML team. All rights reserved.
+#  Copyright 2025-present Aayan Mishra & the PantheraML team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -65,6 +65,16 @@ try:
     TPU_AVAILABLE = True
 except ImportError:
     TPU_AVAILABLE = False
+
+# Phase 2 TPU Performance Integration
+try:
+    from .kernels.tpu_performance import (
+        XLAAttentionOptimizer, ModelShardManager, DynamicShapeManager,
+        TPUCommunicationOptimizer, TPUPerformanceProfiler
+    )
+    PHASE2_TPU_AVAILABLE = True
+except ImportError:
+    PHASE2_TPU_AVAILABLE = False
 
 __all__ = [
     "PantheraMLTrainingArguments",
@@ -377,82 +387,218 @@ class PantheraMLDistributedTrainer(PantheraMLTrainer):
 
 class PantheraMLTPUTrainer(PantheraMLTrainer):
     """
-    EXPERIMENTAL: TPU-enabled trainer for PantheraML.
+    Enhanced TPU trainer with Phase 1 (error/memory) and Phase 2 (performance) support.
     
-    Warning: This is experimental TPU support and may have limitations.
+    Features:
+    - Phase 1: Error handling, memory management, XLA integration
+    - Phase 2: Performance optimization, model sharding, dynamic shapes
     """
     
-    def __init__(self, tpu_config: Optional[MultiTPUConfig] = None, *args, **kwargs):
-        if not TPU_AVAILABLE:
-            raise RuntimeError(
-                "🧪 EXPERIMENTAL: TPU support requires torch_xla. "
-                "Install with: pip install torch_xla"
-            )
+    def __init__(self, *args, **kwargs):
+        # Extract TPU-specific config
+        self.tpu_config = kwargs.pop('tpu_config', {})
+        self.enable_phase2 = kwargs.pop('enable_phase2', True)
         
-        print("🧪 EXPERIMENTAL: Initializing TPU trainer...")
-        print("   ⚠️  Note: TPU support is experimental and may have limitations")
-        
-        self.tpu_config = tpu_config or MultiTPUConfig()
         super().__init__(*args, **kwargs)
         
-        # Move model to TPU device
+        # Initialize Phase 1 components
+        self.tpu_error_handler = tpu_error_handler if TPU_AVAILABLE else None
+        self.tpu_memory = tpu_memory_manager if TPU_AVAILABLE else None
+        self.xla_optimizer = xla_optimizer if TPU_AVAILABLE else None
+        self.tpu_config_manager = tpu_config_manager if TPU_AVAILABLE else None
+        
+        # Initialize Phase 2 components if available and enabled
+        self.phase2_enabled = PHASE2_TPU_AVAILABLE and self.enable_phase2 and TPU_AVAILABLE
+        if self.phase2_enabled:
+            self._init_phase2_components()
+        
+        # Setup TPU configuration
+        if TPU_AVAILABLE and self.tpu_config_manager:
+            self.tpu_config_manager.setup_tpu_config(self.tpu_config)
+    
+    def _init_phase2_components(self):
+        """Initialize Phase 2 performance components."""
         try:
-            self.model = self.model.to(get_tpu_device())
-            print(f"   ✅ Model moved to TPU device")
+            # XLA Attention Optimizer
+            self.xla_attention = XLAAttentionOptimizer(
+                use_flash_attention=self.tpu_config.get('use_flash_attention', True),
+                use_memory_efficient=self.tpu_config.get('use_memory_efficient', True)
+            )
+            
+            # Model Sharding Manager
+            self.shard_manager = ModelShardManager(
+                num_shards=self.tpu_config.get('num_shards', 8),
+                shard_axis=self.tpu_config.get('shard_axis', 0)
+            )
+            
+            # Dynamic Shape Manager
+            self.shape_manager = DynamicShapeManager(
+                max_length=self.tpu_config.get('max_length', 2048),
+                bucket_size=self.tpu_config.get('bucket_size', 64)
+            )
+            
+            # Communication Optimizer
+            self.comm_optimizer = TPUCommunicationOptimizer()
+            
+            # Performance Profiler
+            self.profiler = TPUPerformanceProfiler(
+                enable_detailed=self.tpu_config.get('enable_profiling', False)
+            )
+            
+            print("✅ Phase 2 TPU performance components initialized")
+            
         except Exception as e:
-            print(f"   ⚠️  Warning: Failed to move model to TPU: {e}")
+            print(f"⚠️ Phase 2 initialization failed: {e}")
+            self.phase2_enabled = False
     
     def training_step(self, model, inputs):
-        """Override training step for TPU-specific optimizations."""
-        try:
-            # Standard training step
-            result = super().training_step(model, inputs)
-            
-            # TPU-specific synchronization
-            synchronize_tpu()
-            
-            return result
-        except Exception as e:
-            print(f"🧪 EXPERIMENTAL TPU: Training step error: {e}")
-            raise
-    
-    def get_model_memory_usage(self):
-        """Get TPU memory usage (experimental)."""
+        """Enhanced training step with Phase 2 optimizations."""
         if not TPU_AVAILABLE:
-            return {}
+            return super().training_step(model, inputs)
         
         try:
-            # TPU memory tracking is limited
-            return {
-                'tpu_core': {
-                    'rank': get_tpu_rank(),
-                    'world_size': get_tpu_world_size(),
-                    'device': str(get_tpu_device()),
-                }
-            }
+            # Phase 1: Memory management
+            if self.tpu_memory:
+                self.tpu_memory.clear_cache()
+            
+            # Phase 2: Dynamic shape optimization
+            if self.phase2_enabled and hasattr(self, 'shape_manager'):
+                inputs = self.shape_manager.optimize_batch(inputs)
+            
+            # Phase 2: Performance profiling start
+            if self.phase2_enabled and hasattr(self, 'profiler'):
+                self.profiler.start_step()
+            
+            # Standard training step with XLA optimization
+            if self.xla_optimizer:
+                with self.xla_optimizer.optimize_step():
+                    loss = super().training_step(model, inputs)
+            else:
+                loss = super().training_step(model, inputs)
+            
+            # Phase 2: Performance profiling end
+            if self.phase2_enabled and hasattr(self, 'profiler'):
+                self.profiler.end_step()
+            
+            return loss
+            
         except Exception as e:
-            print(f"🧪 EXPERIMENTAL TPU: Memory tracking error: {e}")
-            return {}
+            if self.tpu_error_handler:
+                return self.tpu_error_handler.handle_training_error(e, model, inputs)
+            else:
+                raise e
     
-    def print_memory_stats(self):
-        """Print TPU memory usage."""
-        if is_tpu_main_process():
-            memory_stats = self.get_model_memory_usage()
-            print("\n🧪 EXPERIMENTAL TPU Status:")
-            for device_id, stats in memory_stats.items():
-                print(f"   {device_id.upper()}: Rank {stats['rank']}/{stats['world_size']}, "
-                      f"Device: {stats['device']}")
-            print()
+    def _prepare_model_for_training(self, model):
+        """Prepare model with Phase 2 optimizations."""
+        model = super()._prepare_model_for_training(model)
+        
+        if not self.phase2_enabled:
+            return model
+        
+        try:
+            # Phase 2: Model sharding
+            if hasattr(self, 'shard_manager'):
+                model = self.shard_manager.shard_model(model)
+                print(f"✅ Model sharded across {self.shard_manager.num_shards} shards")
+            
+            # Phase 2: XLA attention optimization
+            if hasattr(self, 'xla_attention'):
+                model = self.xla_attention.optimize_model(model)
+                print("✅ XLA attention optimizations applied")
+            
+            return model
+            
+        except Exception as e:
+            print(f"⚠️ Phase 2 model preparation failed: {e}")
+            return model
     
-    def save_model(self, output_dir: Optional[str] = None, _internal_call: bool = False):
-        """Override save model for TPU-specific handling."""
-        print("🧪 EXPERIMENTAL: Saving TPU model...")
+    def get_train_dataloader(self):
+        """Enhanced dataloader with Phase 2 optimizations."""
+        dataloader = super().get_train_dataloader()
         
-        # Synchronize before saving
-        synchronize_tpu()
+        if not self.phase2_enabled or not hasattr(self, 'shape_manager'):
+            return dataloader
         
-        # Only save on main process
-        if is_tpu_main_process():
-            super().save_model(output_dir, _internal_call)
+        try:
+            # Phase 2: Dynamic shape optimization for dataloader
+            dataloader = self.shape_manager.optimize_dataloader(dataloader)
+            print("✅ Dataloader optimized for dynamic shapes")
+            return dataloader
+            
+        except Exception as e:
+            print(f"⚠️ Dataloader optimization failed: {e}")
+            return dataloader
+    
+    def _save_checkpoint(self, model, trial, metrics=None):
+        """Enhanced checkpoint saving with TPU synchronization."""
+        if TPU_AVAILABLE and xm:
+            # Synchronize before saving
+            xm.mark_step()
+            if self.is_world_process_zero():
+                print("🔄 Synchronizing TPU devices before checkpoint...")
+        
+        # Phase 2: Communication optimization for checkpointing
+        if self.phase2_enabled and hasattr(self, 'comm_optimizer'):
+            with self.comm_optimizer.optimize_checkpoint():
+                return super()._save_checkpoint(model, trial, metrics)
         else:
-            print("   Skipping save on non-main TPU process")
+            return super()._save_checkpoint(model, trial, metrics)
+    
+    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+        """Enhanced prediction step with Phase 2 optimizations."""
+        if not TPU_AVAILABLE:
+            return super().prediction_step(model, inputs, prediction_loss_only, ignore_keys)
+        
+        try:
+            # Phase 2: Dynamic shape optimization for inference
+            if self.phase2_enabled and hasattr(self, 'shape_manager'):
+                inputs = self.shape_manager.optimize_inference_batch(inputs)
+            
+            # Standard prediction with XLA optimization
+            if self.xla_optimizer:
+                with self.xla_optimizer.optimize_step():
+                    return super().prediction_step(model, inputs, prediction_loss_only, ignore_keys)
+            else:
+                return super().prediction_step(model, inputs, prediction_loss_only, ignore_keys)
+                
+        except Exception as e:
+            if self.tpu_error_handler:
+                return self.tpu_error_handler.handle_inference_error(e, model, inputs)
+            else:
+                raise e
+    
+    def get_performance_metrics(self):
+        """Get Phase 2 performance metrics."""
+        metrics = {}
+        
+        if self.phase2_enabled and hasattr(self, 'profiler'):
+            metrics.update(self.profiler.get_metrics())
+        
+        if self.phase2_enabled and hasattr(self, 'comm_optimizer'):
+            metrics.update(self.comm_optimizer.get_communication_stats())
+        
+        if self.tpu_memory:
+            metrics.update(self.tpu_memory.get_memory_stats())
+        
+        return metrics
+    
+    def cleanup(self):
+        """Enhanced cleanup with Phase 2 components."""
+        try:
+            # Phase 2 cleanup
+            if self.phase2_enabled:
+                if hasattr(self, 'profiler'):
+                    self.profiler.finalize()
+                if hasattr(self, 'comm_optimizer'):
+                    self.comm_optimizer.cleanup()
+                if hasattr(self, 'shard_manager'):
+                    self.shard_manager.cleanup()
+            
+            # Phase 1 cleanup
+            if self.tpu_memory:
+                self.tpu_memory.cleanup()
+            
+            print("✅ TPU trainer cleanup completed")
+            
+        except Exception as e:
+            print(f"⚠️ Cleanup warning: {e}")

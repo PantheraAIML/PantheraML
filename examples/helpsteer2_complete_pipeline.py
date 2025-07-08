@@ -24,10 +24,20 @@ try:
     from pantheraml import FastLanguageModel
     from pantheraml.chat_templates import get_chat_template
     from pantheraml.trainer import pantheraml_train
-    print("✅ Successfully imported PantheraML components")
+    
+    # Try to import PantheraMLTrainer, fallback to regular SFTTrainer
+    try:
+        from pantheraml.trainer import PantheraMLTrainer
+        PANTHERAML_TRAINER_AVAILABLE = True
+        print("✅ Successfully imported PantheraML components with PantheraMLTrainer")
+    except ImportError:
+        PANTHERAML_TRAINER_AVAILABLE = False
+        print("✅ Successfully imported PantheraML components (using standard SFTTrainer)")
+        
 except ImportError as e:
     print(f"❌ Error importing PantheraML: {e}")
     print("Please ensure PantheraML is properly installed")
+    PANTHERAML_TRAINER_AVAILABLE = False
 
 # Now import other ML libraries
 import torch
@@ -138,7 +148,7 @@ def setup_model_and_tokenizer(model_name="Qwen/Qwen2.5-0.5B-Instruct",
         lora_alpha=16,
         lora_dropout=0,  # Supports any value, but = 0 is optimized
         bias="none",     # Supports any value, but = "none" is optimized
-        use_gradient_checkpointing="pantheraml",  # True or "pantheraml" for very long context
+        use_gradient_checkpointing="unsloth",  # Must use "unsloth" (not "pantheraml") for compatibility with unsloth_zoo
         random_state=3407,
         use_rslora=False,   # Support rank stabilized LoRA
         loftq_config=None,  # And LoftQ
@@ -246,15 +256,44 @@ def train_model(model, tokenizer, dataset, output_dir="./pantheraml_helpsteer2_m
         remove_unused_columns=False,
     )
     
-    trainer = SFTTrainer(
-        model=model,
-        tokenizer=tokenizer,
-        train_dataset=dataset,
-        dataset_text_field="text",
-        max_seq_length=2048,
-        dataset_num_proc=2,
-        args=training_args,
-    )
+    # Create trainer with appropriate class based on availability
+    if PANTHERAML_TRAINER_AVAILABLE:
+        print("🔧 Using PantheraMLTrainer for optimized training")
+        trainer = PantheraMLTrainer(
+            model=model,
+            tokenizer=tokenizer,
+            train_dataset=dataset,
+            dataset_text_field="text",
+            max_seq_length=2048,
+            dataset_num_proc=2,
+            args=training_args,
+        )
+    else:
+        print("🔧 Using standard SFTTrainer")
+        # For compatibility with modified SFTTrainer, try without tokenizer first
+        try:
+            trainer = SFTTrainer(
+                model=model,
+                tokenizer=tokenizer,
+                train_dataset=dataset,
+                dataset_text_field="text",
+                max_seq_length=2048,
+                dataset_num_proc=2,
+                args=training_args,
+            )
+        except TypeError as e:
+            if "unexpected keyword argument 'tokenizer'" in str(e):
+                print("⚠️ SFTTrainer doesn't accept tokenizer parameter, trying without...")
+                trainer = SFTTrainer(
+                    model=model,
+                    train_dataset=dataset,
+                    dataset_text_field="text",
+                    max_seq_length=2048,
+                    dataset_num_proc=2,
+                    args=training_args,
+                )
+            else:
+                raise e
     
     # Show current memory stats
     if is_main_process() or not use_multi_gpu:
@@ -414,6 +453,68 @@ def benchmark_model(model, tokenizer):
     except Exception as e:
         print(f"⚠️ Benchmarking failed: {e}")
 
+def check_system_requirements():
+    """
+    Check system requirements and diagnose potential issues
+    """
+    print("🔍 Checking system requirements...")
+    
+    # Check CUDA availability
+    try:
+        import torch
+        if torch.cuda.is_available():
+            print(f"✅ CUDA available: {torch.cuda.device_count()} GPU(s)")
+            for i in range(torch.cuda.device_count()):
+                gpu_name = torch.cuda.get_device_name(i)
+                gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3
+                print(f"   GPU {i}: {gpu_name} ({gpu_memory:.1f} GB)")
+        else:
+            print("❌ CUDA not available - PantheraML requires NVIDIA GPUs")
+            return False
+    except Exception as e:
+        print(f"❌ Error checking CUDA: {e}")
+        return False
+    
+    # Check available memory
+    try:
+        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        if gpu_memory < 4:
+            print(f"⚠️ Low GPU memory: {gpu_memory:.1f} GB (recommend 8+ GB)")
+        else:
+            print(f"✅ GPU memory: {gpu_memory:.1f} GB")
+    except Exception as e:
+        print(f"⚠️ Could not check GPU memory: {e}")
+    
+    # Check internet connectivity for dataset download
+    try:
+        import requests
+        response = requests.get("https://huggingface.co", timeout=10)
+        if response.status_code == 200:
+            print("✅ Internet connectivity to HuggingFace available")
+        else:
+            print("⚠️ HuggingFace may not be accessible")
+    except Exception as e:
+        print(f"⚠️ Internet connectivity check failed: {e}")
+    
+    # Check HuggingFace datasets
+    try:
+        from datasets import load_dataset
+        print("✅ HuggingFace datasets library available")
+    except ImportError as e:
+        print(f"❌ HuggingFace datasets not available: {e}")
+        return False
+    
+    # Check transformers and trl
+    try:
+        from transformers import TrainingArguments
+        from trl import SFTTrainer
+        print("✅ Transformers and TRL libraries available")
+    except ImportError as e:
+        print(f"❌ Missing ML libraries: {e}")
+        return False
+    
+    return True
+
 def main():
     """
     Main function to run the complete pipeline
@@ -452,7 +553,10 @@ def main():
             print("🔄 Falling back to single GPU training")
             args.multi_gpu = False
     
-    if not args.skip_training:
+    # Check system requirements
+    system_check_passed = check_system_requirements()
+    
+    if not args.skip_training and system_check_passed:
         # Step 1: Load model and tokenizer
         print("\n📋 Step 1: Loading model and tokenizer")
         model, tokenizer = setup_model_and_tokenizer(
@@ -544,6 +648,22 @@ def run_kaggle_pipeline(
     
     print("🎯 PantheraML Complete Pipeline for nvidia/HelpSteer2 (Kaggle Mode)")
     print("=" * 70)
+    
+    # Check system requirements first
+    if not check_system_requirements():
+        print("❌ System requirements not met - training may fail")
+        print("💡 This is likely why training is failing")
+        results = {
+            "model_path": output_dir,
+            "merged_model_path": f"{output_dir}_merged", 
+            "gguf_model_path": f"{output_dir}_gguf",
+            "inference_results": None,
+            "benchmark_results": None,
+            "training_completed": False,
+            "system_requirements_error": "System requirements not met"
+        }
+        return results
+    
     print(f"📋 Configuration:")
     print(f"  Model: {model_name}")
     print(f"  Max sequence length: {max_seq_length}")
@@ -572,31 +692,55 @@ def run_kaggle_pipeline(
             print("🔄 Falling back to single GPU training")
             multi_gpu = False
     
-    if not skip_training:
+    # Check system requirements
+    system_check_passed = check_system_requirements()
+    
+    if not skip_training and system_check_passed:
         try:
             # Step 1: Load model and tokenizer
             print("\n📋 Step 1: Loading model and tokenizer")
-            model, tokenizer = setup_model_and_tokenizer(
-                model_name=model_name,
-                max_seq_length=max_seq_length
-            )
+            print(f"🔄 Attempting to load model: {model_name}")
+            
+            try:
+                model, tokenizer = setup_model_and_tokenizer(
+                    model_name=model_name,
+                    max_seq_length=max_seq_length
+                )
+                print("✅ Model and tokenizer loaded successfully")
+            except Exception as model_error:
+                print(f"❌ Model loading failed: {model_error}")
+                raise model_error
             
             # Step 2: Prepare dataset
             print("\n📋 Step 2: Preparing dataset")
-            dataset = prepare_dataset(tokenizer, max_samples=max_samples)
+            print("🔄 Attempting to load nvidia/HelpSteer2 dataset...")
+            
+            try:
+                dataset = prepare_dataset(tokenizer, max_samples=max_samples)
+                print("✅ Dataset prepared successfully")
+            except Exception as dataset_error:
+                print(f"❌ Dataset preparation failed: {dataset_error}")
+                raise dataset_error
             
             # Step 3: Train model
             print("\n📋 Step 3: Training model")
-            trainer = train_model(
-                model, tokenizer, dataset,
-                output_dir=output_dir,
-                per_device_train_batch_size=batch_size,
-                max_steps=max_steps,
-                learning_rate=learning_rate,
-                gradient_accumulation_steps=gradient_accumulation_steps,
-                warmup_steps=warmup_steps,
-                use_multi_gpu=multi_gpu
-            )
+            print("🔄 Attempting to start training...")
+            
+            try:
+                trainer = train_model(
+                    model, tokenizer, dataset,
+                    output_dir=output_dir,
+                    per_device_train_batch_size=batch_size,
+                    max_steps=max_steps,
+                    learning_rate=learning_rate,
+                    gradient_accumulation_steps=gradient_accumulation_steps,
+                    warmup_steps=warmup_steps,
+                    use_multi_gpu=multi_gpu
+                )
+                print("✅ Training completed successfully")
+            except Exception as training_error:
+                print(f"❌ Training failed: {training_error}")
+                raise training_error
             
             # Step 4: Save model
             print("\n📋 Step 4: Saving trained model")
@@ -610,9 +754,14 @@ def run_kaggle_pipeline(
                 results["benchmark_results"] = benchmark_results
                 
         except Exception as e:
-            print(f"❌ Training failed: {e}")
+            import traceback
+            error_msg = str(e) if str(e) else "Unknown error"
+            print(f"❌ Training failed: {error_msg}")
+            print(f"📋 Full error details:")
+            traceback.print_exc()
             print("🔄 Continuing with inference if model exists...")
-            results["training_error"] = str(e)
+            results["training_error"] = error_msg
+            results["training_traceback"] = traceback.format_exc()
     
     # Step 5/6: Load for inference (only on main process for multi-GPU)
     try:
@@ -640,8 +789,13 @@ def run_kaggle_pipeline(
             print(f"📄 Inference results saved to: inference_results.json")
             
     except Exception as e:
-        print(f"❌ Inference failed: {e}")
-        results["inference_error"] = str(e)
+        import traceback
+        error_msg = str(e) if str(e) else "Unknown error"
+        print(f"❌ Inference failed: {error_msg}")
+        print(f"📋 Full error details:")
+        traceback.print_exc()
+        results["inference_error"] = error_msg
+        results["inference_traceback"] = traceback.format_exc()
     
     # Cleanup distributed training
     if multi_gpu and PANTHERAML_DISTRIBUTED_AVAILABLE:
@@ -697,3 +851,4 @@ if __name__ == "__main__":
     else:
         # Use CLI mode for non-Kaggle environments
         main()
+\
