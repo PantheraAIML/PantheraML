@@ -286,7 +286,7 @@ def _patch_trl_rl_trainers(trainer_file = "grpo_trainer"):
         "    from transformers import __version__ as transformers_version\n"\
         "    if Version(transformers_version) <= Version('4.45.2'):\n"\
         "        print('**** Unsloth: Please use our fixed gradient_accumulation_steps by updating transformers, TRL and Unsloth!\\n'\n"\
-        "              '`pip install --upgrade --no-cache-dir --force-reinstall --no-deps unsloth transformers trl pantheraml_zoo`')\n"
+        "              '`pip install --upgrade --no-cache-dir --force-reinstall --no-deps unsloth transformers trl git+https://github.com/PantheraAIML/PantheraML-Zoo.git`')\n"
         extra_args += check_ga
 
         eval_changes = \
