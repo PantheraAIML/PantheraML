@@ -319,6 +319,18 @@ elif DEVICE_TYPE == "xpu":
     else:
         torch_amp_custom_fwd = torch.amp.custom_fwd(device_type = "xpu")
         torch_amp_custom_bwd = torch.amp.custom_bwd(device_type = "xpu")
+else:
+    # Fallback for other device types (e.g., TPU, CPU)
+    # Use dummy functions that don't affect computation
+    def torch_amp_custom_fwd(func=None, **kwargs):
+        if func is None:
+            return lambda f: f
+        return func
+    
+    def torch_amp_custom_bwd(func=None, **kwargs):
+        if func is None:
+            return lambda f: f
+        return func
 # =============================================
 
 # =============================================
