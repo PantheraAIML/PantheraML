@@ -62,7 +62,6 @@ class TPUAttentionOptimizer:
         self.attention_cache = {}
         self.shape_cache = {}
     
-    @torch.jit.script
     def optimized_scaled_dot_product_attention(
         self,
         query: torch.Tensor,
@@ -82,8 +81,8 @@ class TPUAttentionOptimizer:
         
         # Apply causal mask if needed
         if is_causal:
-            causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=query.device), diagonal=1)
-            scores = scores.masked_fill(causal_mask.bool(), float('-inf'))
+            causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=query.device, dtype=torch.bool), diagonal=1)
+            scores = scores.masked_fill(causal_mask, float('-inf'))
         
         # Apply attention mask if provided
         if attention_mask is not None:
@@ -94,7 +93,8 @@ class TPUAttentionOptimizer:
         
         # Apply dropout
         if dropout_p > 0.0:
-            attention_weights = F.dropout(attention_weights, p=dropout_p, training=self.training)
+            # Note: dropout should typically be disabled during inference
+            attention_weights = F.dropout(attention_weights, p=dropout_p, training=True)
         
         # Compute output
         output = torch.matmul(attention_weights, value)
