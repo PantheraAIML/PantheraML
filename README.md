@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🦥 PantheraML
+# PantheraML
 
 **Enhanced LLM Fine-tuning with Multi-GPU Support**
 
