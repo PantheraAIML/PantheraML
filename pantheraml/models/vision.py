@@ -28,7 +28,7 @@ pass
 from ..kernels import (
     post_patch_loss_function,
 )
-from ._utils import __version__, get_pytorch_device, get_autocast_device
+from ._utils import __version__, get_pytorch_device, get_autocast_device, get_inference_context
 from ._utils import *
 from ..save import patch_saving_functions
 from peft import LoraConfig, TaskType, get_peft_model as _get_peft_model
@@ -223,12 +223,12 @@ def unsloth_base_fast_generate(
     pass
 
     try:
-        with torch.inference_mode(), autocaster:
+        with get_inference_context(), autocaster:
             output = self._old_generate(*args, **kwargs)
     except:
         PROMPT_LOOPKUP[arch] = False
         kwargs.pop("prompt_lookup_num_tokens", None)
-        with torch.inference_mode(), autocaster:
+        with get_inference_context(), autocaster:
             output = self._old_generate(*args, **kwargs)
     finally:
         pass

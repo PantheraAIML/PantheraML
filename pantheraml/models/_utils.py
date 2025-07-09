@@ -1411,3 +1411,39 @@ def get_autocast_device():
     if DEVICE_TYPE == "tpu":
         return "cpu"  # TPU operations use CPU for autocast
     return DEVICE_TYPE
+
+def get_inference_context():
+    """
+    Get appropriate inference context for the current device.
+    TPU/XLA doesn't work well with torch.inference_mode() due to version_counter issues.
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE == "tpu":
+        # For TPU, use no_grad instead of inference_mode to avoid version_counter issues
+        return torch.no_grad()
+    else:
+        # For other devices, use inference_mode for better performance
+        return torch.inference_mode()
+
+def tpu_compatible_inference_mode(func):
+    """
+    Decorator that applies the appropriate inference context based on device type.
+    Uses torch.no_grad() for TPU to avoid version_counter issues.
+    """
+    import functools
+    
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        from pantheraml import DEVICE_TYPE
+        
+        if DEVICE_TYPE == "tpu":
+            # For TPU, use no_grad to avoid version_counter issues
+            with torch.no_grad():
+                return func(*args, **kwargs)
+        else:
+            # For other devices, use inference_mode for better performance
+            with torch.inference_mode():
+                return func(*args, **kwargs)
+    
+    return wrapper

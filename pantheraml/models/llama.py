@@ -19,7 +19,7 @@ import functools
 from typing import Optional, Tuple, List, Union
 from ._utils import *
 from ._utils import patch_unsloth_smart_gradient_checkpointing
-from ._utils import __version__, get_pytorch_device, get_autocast_device
+from ._utils import __version__, get_pytorch_device, get_autocast_device, get_inference_context
 from torch.nn.functional import scaled_dot_product_attention
 from transformers import __version__ as transformers_version
 from pantheraml_zoo.utils import Version, _get_dtype
@@ -1661,8 +1661,8 @@ def unsloth_fast_generate(
 
     kwargs["pad_token_id"] = kwargs.pop("pad_token_id", model_eos_token_id)
 
-    # Mixed precision autocast
-    with torch.inference_mode(), torch.autocast(device_type = get_autocast_device(), dtype = dtype):
+    # Mixed precision autocast with TPU-compatible inference context
+    with get_inference_context(), torch.autocast(device_type = get_autocast_device(), dtype = dtype):
         output = self._old_generate(*args, **kwargs)
     pass
 

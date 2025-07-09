@@ -25,6 +25,17 @@ import functools
 from typing import Optional
 from pantheraml import DEVICE_TYPE
 
+# Import TPU-compatible inference mode
+try:
+    from pantheraml.models._utils import tpu_compatible_inference_mode
+except ImportError:
+    # Fallback if import fails
+    def tpu_compatible_inference_mode(func):
+        if DEVICE_TYPE == "tpu":
+            return torch.no_grad()(func)
+        else:
+            return torch.inference_mode(func)
+
 # torch.cuda.amp.custom_fwd is deprecated >= 2.4
 import torch
 torch_Tensor = torch.Tensor
@@ -292,7 +303,7 @@ pass
 
 # INTEL GPU Specific Logic
 if DEVICE_TYPE == "xpu" and HAS_XPU_STREAM:
-    @torch.inference_mode
+    @tpu_compatible_inference_mode
     def fast_dequantize(W, quant_state = None, out = None, use_global_buffer = False):
         # TODO: After adding XPU BNB support, check this function 
         if quant_state is None: return W
@@ -368,7 +379,7 @@ if DEVICE_TYPE == "xpu" and HAS_XPU_STREAM:
     pass
 # NVIDIA GPU Default Logic
 elif DEVICE_TYPE == "cuda" and HAS_CUDA_STREAM:
-    @torch.inference_mode
+    @tpu_compatible_inference_mode
     def fast_dequantize(W, quant_state = None, out = None, use_global_buffer = False):
         if quant_state is None: return W
         if type(quant_state) is not list:
@@ -443,7 +454,7 @@ elif DEVICE_TYPE == "cuda" and HAS_CUDA_STREAM:
         return out.t() if is_transposed else out
     pass
 else:
-    @torch.inference_mode
+    @tpu_compatible_inference_mode
     def fast_dequantize(W, quant_state = None, out = None, use_global_buffer = False):
         if quant_state is None: return W
         if type(quant_state) is not list:

@@ -18,6 +18,17 @@ from peft.tuners.lora import Linear4bit as Peft_Linear4bit
 from peft.tuners.lora import Linear as Peft_Linear
 from typing import Optional, Callable, Union, List
 import sys
+
+# Import TPU-compatible inference mode
+try:
+    from .models._utils import tpu_compatible_inference_mode
+except ImportError:
+    from pantheraml import DEVICE_TYPE
+    def tpu_compatible_inference_mode(func):
+        if DEVICE_TYPE == "tpu":
+            return torch.no_grad()(func)
+        else:
+            return torch.inference_mode(func)
 import requests
 import torch
 import os
@@ -200,7 +211,7 @@ def fast_save_pickle(shard, name):
 pass
 
 
-@torch.inference_mode
+@tpu_compatible_inference_mode
 def pantheraml_save_model(
     model,
     tokenizer,
@@ -2236,7 +2247,7 @@ from pantheraml_zoo.llama_cpp import (
     convert_to_gguf as _convert_to_gguf,
 )
 
-@torch.inference_mode
+@tpu_compatible_inference_mode
 def save_to_gguf_generic(
     model,
     save_directory,
@@ -2280,7 +2291,7 @@ def save_to_gguf_generic(
 pass
 
 
-@torch.inference_mode
+@tpu_compatible_inference_mode
 def pantheraml_generic_save(
     model,
     tokenizer,
