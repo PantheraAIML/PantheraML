@@ -1378,3 +1378,36 @@ def validate_loftq_config(loftq_config, lora_dropout, bias, init_lora_weights, m
     pass
 
     return loftq_config
+
+def get_pytorch_device(device_id=None):
+    """
+    Convert PantheraML device type to PyTorch-compatible device string.
+    
+    Args:
+        device_id: Optional device ID (e.g., 0 for first device)
+        
+    Returns:
+        str: PyTorch-compatible device string
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE == "tpu":
+        # PyTorch/XLA uses "xla" for TPU devices
+        return "xla" if device_id is None else f"xla:{device_id}"
+    elif device_id is not None:
+        return f"{DEVICE_TYPE}:{device_id}"
+    else:
+        return DEVICE_TYPE
+
+def get_autocast_device():
+    """
+    Get device type for torch.autocast operations.
+    
+    Returns:
+        str: Device type compatible with torch.autocast
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE == "tpu":
+        return "cpu"  # TPU operations use CPU for autocast
+    return DEVICE_TYPE

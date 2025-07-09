@@ -28,7 +28,7 @@ pass
 from ..kernels import (
     post_patch_loss_function,
 )
-from ._utils import __version__
+from ._utils import __version__, get_pytorch_device, get_autocast_device
 from ._utils import *
 from ..save import patch_saving_functions
 from peft import LoraConfig, TaskType, get_peft_model as _get_peft_model
@@ -177,10 +177,10 @@ def unsloth_base_fast_generate(
 
     # Mixed precision autocast
     if os.environ.get("UNSLOTH_FORCE_FLOAT32", "0") == "1":
-        autocaster = torch.autocast(device_type = DEVICE_TYPE, dtype = torch.float16)
+        autocaster = torch.autocast(device_type = get_autocast_device(), dtype = torch.float16)
         dtype = torch.float16
     else:
-        autocaster = torch.autocast(device_type = DEVICE_TYPE, dtype = dtype)
+        autocaster = torch.autocast(device_type = get_autocast_device(), dtype = dtype)
 
     # Prepare LoRA
     # state_dict = convert_lora_modules(self, dtype = dtype)

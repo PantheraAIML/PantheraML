@@ -14,7 +14,7 @@
 
 from .llama import *
 import os
-from ._utils import __version__
+from ._utils import __version__, get_pytorch_device, get_autocast_device
 from .llama import (
     LlamaRotaryEmbedding,
     LlamaLinearScalingRotaryEmbedding,
@@ -320,7 +320,7 @@ def GraniteAttention_fast_forward_inference(
     Qn *= cos
     Qn.addcmul_(RH_Q, sin)
 
-    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = f"{DEVICE_TYPE}:0")
+    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = get_pytorch_device(0))
     RH_K[:,:,:,:h] = Kn[:,:,:,h:]
     RH_K[:,:,:,h:] = Kn[:,:,:,:h]
     torch.neg(RH_K[:,:,:,:h], out = RH_K[:,:,:,:h])

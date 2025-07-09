@@ -19,7 +19,7 @@ import functools
 from typing import Optional, Tuple, List, Union
 from ._utils import *
 from ._utils import patch_unsloth_smart_gradient_checkpointing
-from ._utils import __version__
+from ._utils import __version__, get_pytorch_device, get_autocast_device
 from torch.nn.functional import scaled_dot_product_attention
 from transformers import __version__ as transformers_version
 from pantheraml_zoo.utils import Version, _get_dtype
@@ -281,7 +281,7 @@ def LlamaAttention_fast_forward_inference(
     Qn *= cos
     Qn.addcmul_(RH_Q, sin)
 
-    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = f"{DEVICE_TYPE}:0")
+    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = get_pytorch_device(0))
     RH_K[:,:,:,:h] = Kn[:,:,:,h:]
     RH_K[:,:,:,h:] = Kn[:,:,:,:h]
     RH_K[:,:,:,:h].neg_() #torch.neg(RH_K[:,:,:,:h], out = RH_K[:,:,:,:h])
@@ -346,7 +346,7 @@ def fast_swiglu_inference(self, X, temp_gate = None, temp_up = None, gate_multip
     # up   = self.up_proj(X)
     bsz, _, hd = X.shape
     # mlp_size = self.config.intermediate_size
-    # temp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = f"{DEVICE_TYPE}:0")
+    # temp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = get_pytorch_device(0))
 
     gate = fast_linear_forward(self.gate_proj, X, out = temp_gate)
     
@@ -701,7 +701,7 @@ def LlamaModel_fast_forward(
         position_ids = torch.arange(
             past_key_values_length, seq_length + past_key_values_length,
             dtype  = torch.int32,
-            device = f"{DEVICE_TYPE}:0",
+            device = get_pytorch_device(0),
         )
         position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
     elif position_ids is not None:
@@ -874,13 +874,13 @@ def LlamaModel_fast_forward(
                     is_causal = True,
                     sliding_window = self.config.sliding_window,
                 )\
-                    .to_causal_4d(1, n, n, dtype = inputs_embeds.dtype, device = DEVICE_TYPE,)\
+                    .to_causal_4d(1, n, n, dtype = inputs_embeds.dtype, device = get_pytorch_device(),)\
                     .squeeze(0).squeeze(0)
 
                 self.GA_mask = AttentionMaskConverter(
                     is_causal = True,
                 )\
-                    .to_causal_4d(1, n, n, dtype = inputs_embeds.dtype, device = DEVICE_TYPE,)\
+                    .to_causal_4d(1, n, n, dtype = inputs_embeds.dtype, device = get_pytorch_device(),)\
                     .squeeze(0).squeeze(0)
             pass
         pass
@@ -997,11 +997,11 @@ def _LlamaModel_fast_forward_inference(attention_fast_forward_inference=LlamaAtt
         bsz, q_len, hd = X.shape
         assert(q_len == 1)
         # Get saved buffers to reduce memory movement
-        residual = torch.empty((bsz, q_len, hd), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
-        _XX = torch.empty((2, bsz, q_len, hd), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
+        residual = torch.empty((bsz, q_len, hd), dtype = torch.float32, device = get_pytorch_device(0))
+        _XX = torch.empty((2, bsz, q_len, hd), dtype = torch.float32, device = get_pytorch_device(0))
         XX, XX2 = _XX[0], _XX[1]
-        variance = torch.empty((bsz, q_len, 1), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
-        temp_mlp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = f"{DEVICE_TYPE}:0")
+        variance = torch.empty((bsz, q_len, 1), dtype = torch.float32, device = get_pytorch_device(0))
+        temp_mlp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = get_pytorch_device(0))
         temp_gate, temp_up = temp_mlp[0], temp_mlp[1]
 
         seq_len = past_key_values[0][0].shape[-2]
@@ -1210,7 +1210,7 @@ def CausalLM_fast_forward(fast_forward_inference):
             shift_logits = logits
             # if not hasattr(self, "extra_ignored_labels"):
             #     # Fixes https://github.com/unslothai/unsloth/issues/10
-            #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = f"{DEVICE_TYPE}:0")
+            #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = get_pytorch_device(0))
             # pass
             shift_labels = torch.empty_like(labels)
             shift_labels[..., :-1] = labels[..., 1:]
@@ -1324,7 +1324,7 @@ class LlamaRotaryEmbedding(torch.nn.Module):
             partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
             dim = getattr(config, "head_dim", None)
             if dim is None: dim = int((config.hidden_size // config.num_attention_heads))
-            device = DEVICE_TYPE
+            device = get_pytorch_device()
             max_position_embeddings = config.max_position_embeddings
         pass
 
@@ -1373,7 +1373,7 @@ class LlamaRotaryEmbedding(torch.nn.Module):
         if seq_len <= self.current_rope_size: return
         # Iteratively grow by increments of 8192
         self.current_rope_size = ((seq_len // 8192) + ((seq_len % 8192) != 0)) * 8192
-        self._set_cos_sin_cache(self.current_rope_size, device = DEVICE_TYPE, dtype = x.dtype)
+        self._set_cos_sin_cache(self.current_rope_size, device = get_pytorch_device(), dtype = x.dtype)
     pass
 pass
 
@@ -1419,7 +1419,7 @@ class LlamaExtendedRotaryEmbedding(torch.nn.Module):
             base = config.rope_theta
             partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
             dim = int((config.hidden_size // config.num_attention_heads))
-            device = DEVICE_TYPE
+            device = get_pytorch_device()
             max_position_embeddings = config.max_position_embeddings
         pass
 
@@ -1499,7 +1499,7 @@ class LlamaExtendedRotaryEmbedding(torch.nn.Module):
         if seq_len <= self.current_rope_size: return
         # Iteratively grow by increments of 8192
         self.current_rope_size = ((seq_len // 8192) + ((seq_len % 8192) != 0)) * 8192
-        self._set_cos_sin_cache(self.current_rope_size, device = DEVICE_TYPE, dtype = x.dtype)
+        self._set_cos_sin_cache(self.current_rope_size, device = get_pytorch_device(), dtype = x.dtype)
     pass
 pass
 
@@ -1526,7 +1526,7 @@ class LongRopeRotaryEmbedding(torch.nn.Module):
             base = config.rope_theta
             partial_rotary_factor = config.partial_rotary_factor if hasattr(config, "partial_rotary_factor") else 1.0
             dim = int((config.hidden_size // config.num_attention_heads))
-            device = DEVICE_TYPE
+            device = get_pytorch_device()
             max_position_embeddings = config.max_position_embeddings
         pass
 
@@ -1614,7 +1614,7 @@ class LongRopeRotaryEmbedding(torch.nn.Module):
         if seq_len <= self.current_rope_size: return
         # Iteratively grow by increments of 8192
         self.current_rope_size = ((seq_len // 8192) + ((seq_len % 8192) != 0)) * 8192
-        self._set_cos_sin_cache(self.current_rope_size, device = DEVICE_TYPE, dtype = x.dtype)
+        self._set_cos_sin_cache(self.current_rope_size, device = get_pytorch_device(), dtype = x.dtype)
     pass
 pass
 
@@ -1662,7 +1662,7 @@ def unsloth_fast_generate(
     kwargs["pad_token_id"] = kwargs.pop("pad_token_id", model_eos_token_id)
 
     # Mixed precision autocast
-    with torch.inference_mode(), torch.autocast(device_type = DEVICE_TYPE, dtype = dtype):
+    with torch.inference_mode(), torch.autocast(device_type = get_autocast_device(), dtype = dtype):
         output = self._old_generate(*args, **kwargs)
     pass
 
@@ -2289,7 +2289,7 @@ class FastLlamaModel:
                     pass
 
                     model.get_input_embeddings().modules_to_save.default\
-                        .to(device = DEVICE_TYPE, dtype = new_dtype, non_blocking = True)
+                        .to(device = get_pytorch_device(), dtype = new_dtype, non_blocking = True)
                     model.get_input_embeddings().modules_to_save.default.requires_grad_(True)
 
                     # [TODO] Move old embed_tokens to CPU - should be disk!
@@ -2309,7 +2309,7 @@ class FastLlamaModel:
                     pass
 
                     model.get_output_embeddings().modules_to_save.default\
-                        .to(device = DEVICE_TYPE, dtype = new_dtype, non_blocking = True)
+                        .to(device = get_pytorch_device(), dtype = new_dtype, non_blocking = True)
                     model.get_output_embeddings().modules_to_save.default.requires_grad_(True)
 
                     # [TODO] Move old lm_head to CPU - should be disk!
@@ -2573,7 +2573,7 @@ class FastLlamaModel:
             pass
 
             model.get_input_embeddings().modules_to_save.default\
-                .to(device = DEVICE_TYPE, dtype = new_dtype, non_blocking = True)
+                .to(device = get_pytorch_device(), dtype = new_dtype, non_blocking = True)
             model.get_input_embeddings().modules_to_save.default.requires_grad_(True)
         pass
 
@@ -2589,7 +2589,7 @@ class FastLlamaModel:
             pass
 
             model.get_output_embeddings().modules_to_save.default\
-                .to(device = DEVICE_TYPE, dtype = new_dtype, non_blocking = True)
+                .to(device = get_pytorch_device(), dtype = new_dtype, non_blocking = True)
             model.get_output_embeddings().modules_to_save.default.requires_grad_(True)
         pass
 
@@ -2804,7 +2804,7 @@ class FastLlamaModel:
         # Patch cross entropy loss labels
         # Fixes https://github.com/unslothai/unsloth/issues/10
         max_seq_length = model.max_seq_length
-        # extra_ignored_labels = torch.full((max_seq_length, 1), -100, device = f"{DEVICE_TYPE}:0")
+        # extra_ignored_labels = torch.full((max_seq_length, 1), -100, device = get_pytorch_device(0))
         # model.model.extra_ignored_labels = extra_ignored_labels
         internal_model = model
         while hasattr(internal_model, "model"):

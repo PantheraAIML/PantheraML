@@ -14,7 +14,7 @@
 
 from .llama import *
 import os
-from ._utils import __version__
+from ._utils import __version__, get_pytorch_device, get_autocast_device
 from .llama import (
     LlamaRotaryEmbedding,
     LlamaLinearScalingRotaryEmbedding,
@@ -300,7 +300,7 @@ def MistralForCausalLM_fast_forward(
         shift_logits = logits
         # if not hasattr(self, "extra_ignored_labels"):
         #     # Fixes https://github.com/unslothai/unsloth/issues/10
-        #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = f"{DEVICE_TYPE}:0")
+        #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = get_pytorch_device(0))
         # pass
         # shift_labels = torch.hstack((labels[..., 1:], self.extra_ignored_labels[:labels.shape[0]]))
         shift_labels = torch.empty_like(labels)

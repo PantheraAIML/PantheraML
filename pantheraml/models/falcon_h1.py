@@ -14,7 +14,7 @@
 
 from .llama import *
 import os
-from ._utils import __version__
+from ._utils import __version__, get_pytorch_device, get_autocast_device
 from pantheraml_zoo.utils import Version, _get_dtype
 from .llama import (
     LlamaRotaryEmbedding,
@@ -292,7 +292,7 @@ def FalconH1Attention_fast_forward_inference(
     Qn *= cos
     Qn.addcmul_(RH_Q, sin)
 
-    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = f"{DEVICE_TYPE}:0")
+    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = get_pytorch_device(0))
     RH_K[:,:,:,:h] = Kn[:,:,:,h:]
     RH_K[:,:,:,h:] = Kn[:,:,:,:h]
     RH_K[:,:,:,:h].neg_() #torch.neg(RH_K[:,:,:,:h], out = RH_K[:,:,:,:h])
@@ -480,11 +480,11 @@ def _FalconH1_fast_forward_inference(attention_fast_forward_inference=FalconH1At
         bsz, q_len, hd = X.shape
         assert(q_len == 1)
         # Get saved buffers to reduce memory movement
-        residual = torch.empty((bsz, q_len, hd), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
-        _XX = torch.empty((2, bsz, q_len, hd), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
+        residual = torch.empty((bsz, q_len, hd), dtype = torch.float32, device = get_pytorch_device(0))
+        _XX = torch.empty((2, bsz, q_len, hd), dtype = torch.float32, device = get_pytorch_device(0))
         XX, XX2 = _XX[0], _XX[1]
-        variance = torch.empty((bsz, q_len, 1), dtype = torch.float32, device = f"{DEVICE_TYPE}:0")
-        temp_mlp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = f"{DEVICE_TYPE}:0")
+        variance = torch.empty((bsz, q_len, 1), dtype = torch.float32, device = get_pytorch_device(0))
+        temp_mlp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = get_pytorch_device(0))
         temp_gate, temp_up = temp_mlp[0], temp_mlp[1]
         seq_len = past_key_values[0][0].shape[-2]
         if bsz != 1:
