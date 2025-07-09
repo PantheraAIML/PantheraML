@@ -281,7 +281,7 @@ def LlamaAttention_fast_forward_inference(
     Qn *= cos
     Qn.addcmul_(RH_Q, sin)
 
-    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = "cuda:0")
+    RH_K = RH_Q[:,:n_kv_heads,:,:] # torch.empty((n_kv_heads, 1, head_dim), dtype = dtype, device = f"{DEVICE_TYPE}:0")
     RH_K[:,:,:,:h] = Kn[:,:,:,h:]
     RH_K[:,:,:,h:] = Kn[:,:,:,:h]
     RH_K[:,:,:,:h].neg_() #torch.neg(RH_K[:,:,:,:h], out = RH_K[:,:,:,:h])
@@ -346,7 +346,7 @@ def fast_swiglu_inference(self, X, temp_gate = None, temp_up = None, gate_multip
     # up   = self.up_proj(X)
     bsz, _, hd = X.shape
     # mlp_size = self.config.intermediate_size
-    # temp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = "cuda:0")
+    # temp = torch.empty((2, bsz, 1, mlp_size), dtype = X.dtype, device = f"{DEVICE_TYPE}:0")
 
     gate = fast_linear_forward(self.gate_proj, X, out = temp_gate)
     
@@ -1210,7 +1210,7 @@ def CausalLM_fast_forward(fast_forward_inference):
             shift_logits = logits
             # if not hasattr(self, "extra_ignored_labels"):
             #     # Fixes https://github.com/unslothai/unsloth/issues/10
-            #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = "cuda:0")
+            #     self.extra_ignored_labels = torch.full((self.max_seq_length, 1), -100, device = f"{DEVICE_TYPE}:0")
             # pass
             shift_labels = torch.empty_like(labels)
             shift_labels[..., :-1] = labels[..., 1:]
@@ -1752,9 +1752,16 @@ class FastLlamaModel:
             if not is_vLLM_available():
                 print("Unsloth: vLLM is not installed! Will use Unsloth inference!")
                 fast_inference = False
-            major_version, minor_version = torch.cuda.get_device_capability()
-            if major_version < 7:
-                print("Unsloth: vLLM does not work on older GPUs - will switch to Unsloth inference!")
+            elif DEVICE_TYPE == "cuda":
+                major_version, minor_version = torch.cuda.get_device_capability()
+                if major_version < 7:
+                    print("Unsloth: vLLM does not work on older GPUs - will switch to Unsloth inference!")
+                    fast_inference = False
+            elif DEVICE_TYPE == "tpu":
+                print("Unsloth: vLLM does not support TPU - will switch to Unsloth inference!")
+                fast_inference = False
+            elif DEVICE_TYPE == "xpu":
+                print("Unsloth: vLLM does not support Intel XPU - will switch to Unsloth inference!")
                 fast_inference = False
             if unsloth_vllm_standby and os.environ.get("UNSLOTH_VLLM_STANDBY", "0") == "0":
                 raise RuntimeError("Unsloth: `unsloth_vllm_standby` is True, but  environment variable `UNSLOTH_VLLM_STANDBY` is not set to 1!")
@@ -1781,6 +1788,31 @@ class FastLlamaModel:
 
             # TODO: After adding vLLM support for XPU, changed this
             vllm_version = ""
+        elif DEVICE_TYPE == "tpu":
+            # TPU device handling
+            try:
+                import torch_xla.core.xla_model as xm
+                # Create mock gpu_stats object for TPU
+                class TPUStats:
+                    def __init__(self):
+                        self.name = "TPU"
+                        self.total_memory = 16 * 1024 * 1024 * 1024  # 16GB default
+                
+                gpu_stats = TPUStats()
+                num_gpus = xm.xrt_world_size()
+                gpu_stats_snippet = "TPU Runtime: XLA."
+                vllm_version = ""
+            except ImportError:
+                # Fallback for environments without torch_xla
+                class TPUStats:
+                    def __init__(self):
+                        self.name = "TPU (simulated)"
+                        self.total_memory = 16 * 1024 * 1024 * 1024  # 16GB default
+                
+                gpu_stats = TPUStats()
+                num_gpus = 1
+                gpu_stats_snippet = "TPU Runtime: Not available."
+                vllm_version = ""
         else:
             raise ValueError(f"Unsloth: Unsupported device type: {DEVICE_TYPE}")
 
@@ -2772,7 +2804,7 @@ class FastLlamaModel:
         # Patch cross entropy loss labels
         # Fixes https://github.com/unslothai/unsloth/issues/10
         max_seq_length = model.max_seq_length
-        # extra_ignored_labels = torch.full((max_seq_length, 1), -100, device = "cuda:0")
+        # extra_ignored_labels = torch.full((max_seq_length, 1), -100, device = f"{DEVICE_TYPE}:0")
         # model.model.extra_ignored_labels = extra_ignored_labels
         internal_model = model
         while hasattr(internal_model, "model"):

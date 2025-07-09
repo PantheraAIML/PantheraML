@@ -1,4 +1,4 @@
-#  Copyright 2025-present Aayan Mishra & the PantheraML team. All rights reserved.
+# Copyright 2023-present Daniel Han-Chen & the Unsloth team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -177,10 +177,10 @@ def unsloth_base_fast_generate(
 
     # Mixed precision autocast
     if os.environ.get("UNSLOTH_FORCE_FLOAT32", "0") == "1":
-        autocaster = torch.autocast(device_type = "cuda", dtype = torch.float16)
+        autocaster = torch.autocast(device_type = DEVICE_TYPE, dtype = torch.float16)
         dtype = torch.float16
     else:
-        autocaster = torch.autocast(device_type = "cuda", dtype = dtype)
+        autocaster = torch.autocast(device_type = DEVICE_TYPE, dtype = dtype)
 
     # Prepare LoRA
     # state_dict = convert_lora_modules(self, dtype = dtype)
@@ -293,6 +293,16 @@ class FastBaseModel:
             gpu_stats_snippet = f"Intel Toolkit: {gpu_version}."
 
             # TODO: After adding vLLM support for XPU, changed this
+            vllm_version = ""
+        elif DEVICE_TYPE == "tpu":
+            # TPU support - basic stats
+            gpu_stats = type('TPUStats', (), {
+                'name': 'TPU (Google Cloud)',
+                'total_memory': 16 * 1024 * 1024 * 1024  # 16GB estimate
+            })()
+            gpu_version = "TPU"
+            num_gpus = 1  # Treat TPU as single device
+            gpu_stats_snippet = f"TPU Runtime."
             vllm_version = ""
         else:
             raise ValueError(f"Unsloth: Unsupported device type: {DEVICE_TYPE}")
@@ -446,6 +456,7 @@ class FastBaseModel:
             gc.collect()
             if DEVICE_TYPE == "cuda":  torch.cuda.empty_cache()
             elif DEVICE_TYPE == "xpu": torch.xpu.empty_cache()
+            elif DEVICE_TYPE == "tpu": pass  # TPU handles memory automatically
         pass
 
         # Counteract saved tokenizers
@@ -543,6 +554,8 @@ class FastBaseModel:
                 torch.cuda.empty_cache()
             elif DEVICE_TYPE == "xpu":
                 torch.xpu.empty_cache()
+            elif DEVICE_TYPE == "tpu":
+                pass  # TPU handles memory automatically
         pass
         return model, tokenizer
     pass
@@ -612,6 +625,8 @@ class FastBaseModel:
                 torch.cuda.empty_cache()
             elif DEVICE_TYPE == "xpu":
                 torch.xpu.empty_cache()
+            elif DEVICE_TYPE == "tpu":
+                pass  # TPU handles memory automatically
         pass
         max_seq_length = model.max_seq_length
         # if we pass loftq_config = None we will get an error
@@ -644,6 +659,8 @@ class FastBaseModel:
                 torch.cuda.empty_cache()
             elif DEVICE_TYPE == "xpu":
                 torch.xpu.empty_cache()
+            elif DEVICE_TYPE == "tpu":
+                pass  # TPU handles memory automatically
         pass
         patch_saving_functions(model, vision = True)
 
