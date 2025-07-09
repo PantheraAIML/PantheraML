@@ -88,6 +88,15 @@ except Exception as exception:
 pass
 
 def get_device_type():
+    # Allow overriding device type for testing/development
+    override_device = os.environ.get("PANTHERAML_DEVICE_TYPE", "").lower()
+    if override_device in ["cuda", "xpu", "tpu", "cpu"]:
+        if override_device == "tpu":
+            print("⚠️  EXPERIMENTAL: TPU support forced via PANTHERAML_DEVICE_TYPE. This is experimental and may have limitations.")
+        elif override_device == "cpu":
+            print("⚠️  WARNING: CPU device forced via PANTHERAML_DEVICE_TYPE")
+        return override_device
+    
     if hasattr(torch, "cuda") and torch.cuda.is_available():
         return "cuda"
     elif hasattr(torch, "xpu") and torch.xpu.is_available():

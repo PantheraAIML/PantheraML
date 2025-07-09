@@ -66,6 +66,17 @@ __all__ = [
     "unsloth_compile_transformers",
     "patch_fast_lora",
     "validate_loftq_config",
+    
+    # Device-agnostic utility functions
+    "get_pytorch_device",
+    "get_autocast_device",
+    "get_inference_context",
+    "tpu_compatible_inference_mode",
+    "get_tpu_safe_device",
+    "initialize_tpu_context",
+    "safe_device_placement",
+    "get_device_with_fallback",
+    "ensure_tpu_initialization",
 ]
 
 import torch
@@ -1447,3 +1458,157 @@ def tpu_compatible_inference_mode(func):
                 return func(*args, **kwargs)
     
     return wrapper
+
+def get_tpu_safe_device(ordinal=None):
+    """
+    Get TPU device safely, handling driver initialization issues.
+    
+    Args:
+        ordinal: Optional TPU ordinal (device ID)
+        
+    Returns:
+        torch.device: Safe device object
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE != "tpu":
+        return torch.device(get_pytorch_device(ordinal))
+    
+    try:
+        import torch_xla.core.xla_model as xm
+        
+        # Check if TPU is available first
+        world_size = xm.xrt_world_size()
+        if world_size == 0:
+            raise RuntimeError("No TPU devices available")
+            
+        # Get device with proper error handling
+        if ordinal is not None:
+            device = xm.xla_device(ordinal=ordinal)
+        else:
+            device = xm.xla_device()
+            
+        return device
+        
+    except Exception as e:
+        # Fallback to CPU if TPU fails
+        print(f"TPU initialization failed: {e}")
+        print("Falling back to CPU device")
+        return torch.device("cpu")
+
+def initialize_tpu_context():
+    """
+    Initialize TPU context properly to prevent driver errors.
+    
+    Returns:
+        torch.device or None: Initialized TPU device or None if failed
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE != "tpu":
+        return None
+        
+    try:
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        
+        # Force XLA initialization with proper sequencing
+        device = xm.xla_device()
+        
+        # Create a dummy tensor to initialize the device context
+        dummy = torch.tensor([1.0], device=device)
+        xm.mark_step()  # Synchronize XLA operations
+        
+        # Clean up dummy tensor
+        del dummy
+        
+        return device
+        
+    except Exception as e:
+        print(f"TPU context initialization failed: {e}")
+        return None
+
+def safe_device_placement(tensor_or_model, target_device):
+    """
+    Safely place tensor or model on target device with proper XLA handling.
+    
+    Args:
+        tensor_or_model: PyTorch tensor or model
+        target_device: Target device
+        
+    Returns:
+        Tensor or model placed on target device
+    """
+    try:
+        if hasattr(target_device, 'type') and target_device.type == "xla":
+            # For XLA devices, ensure proper synchronization
+            import torch_xla.core.xla_model as xm
+            result = tensor_or_model.to(target_device)
+            xm.mark_step()  # Synchronize XLA operations
+            return result
+        else:
+            return tensor_or_model.to(target_device)
+            
+    except Exception as e:
+        print(f"Device placement failed: {e}")
+        # Fallback to CPU
+        return tensor_or_model.to("cpu")
+
+def get_device_with_fallback(device_id=None):
+    """
+    Get device with automatic fallback for TPU driver issues.
+    
+    Args:
+        device_id: Optional device ID
+        
+    Returns:
+        torch.device: Safe device object
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE == "tpu":
+        # Try TPU initialization with fallback
+        tpu_device = get_tpu_safe_device(device_id)
+        if tpu_device.type == "cpu":
+            print("TPU not available, using CPU")
+        return tpu_device
+    else:
+        return torch.device(get_pytorch_device(device_id))
+
+def ensure_tpu_initialization():
+    """
+    Ensure TPU is properly initialized before any operations.
+    This function should be called at the start of TPU-related operations.
+    
+    Returns:
+        bool: True if TPU is available and initialized, False otherwise
+    """
+    from pantheraml import DEVICE_TYPE
+    
+    if DEVICE_TYPE != "tpu":
+        return False
+        
+    try:
+        import torch_xla.core.xla_model as xm
+        
+        # Check TPU availability
+        world_size = xm.xrt_world_size()
+        if world_size == 0:
+            print("No TPU devices detected")
+            return False
+            
+        # Initialize TPU context
+        device = initialize_tpu_context()
+        if device is None:
+            print("Failed to initialize TPU context")
+            return False
+            
+        print(f"TPU initialized successfully: {device}")
+        return True
+        
+    except ImportError:
+        print("PyTorch XLA not available")
+        return False
+    except Exception as e:
+        print(f"TPU initialization error: {e}")
+        return False
